@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-
 import sys
-##import RPi.GPIO as GPIO
 sys.path.append('../')
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
 from deepstream_class import Pipeline, Pipeline_tracker , VideoPipeline, NodePipeline, NodeFilePipeline
 import pyds
-import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -16,7 +13,6 @@ import argparse
 
 def osd_sink_pad_buffer_probe(self, pad,info,u_data):
         msg = String()
-       # bounding_box = BoundingBox2D()
         gst_buffer = info.get_buffer()
         batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
         l_frame = batch_meta.frame_meta_list
@@ -40,10 +36,9 @@ def osd_sink_pad_buffer_probe(self, pad,info,u_data):
                     y1 = int(top)
                     x2 = int(left + width)
                     y2 = int(top + height)
-                    if obj_meta.class_id == 0: 
-                        result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
-                        msg.data = result
-                        self.publisher_.publish(msg)
+                    result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
+                    msg.data = result
+                    self.publisher_.publish(msg)
                         
                     rect_params.border_width = 3
                     rect_params.border_color.set(1.0, 1.0, 0.0, 1.0)
@@ -101,6 +96,12 @@ def main4():
 def main5(video_file='sample_720p.h264'):
     rclpy.init()
     pipeline = NodeFilePipeline('config_inferyolov8.txt', video_file, 'config_tracker.txt')
+    # Explicitly add the probe since __init__ no longer does it
+    if pipeline.osdsinkpad:
+        pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, pipeline.osd_sink_pad_buffer_probe, 0)
+    else:
+        pipeline.get_logger().error("OSD sink pad not available, cannot add probe.")
+        # Handle error appropriately
     pipeline.run()
     rclpy.shutdown()
     

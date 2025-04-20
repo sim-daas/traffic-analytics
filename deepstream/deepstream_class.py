@@ -26,6 +26,7 @@ def bus_call(bus, message, loop):
     return True
 
 class NodeFilePipeline(Node):
+    '''
     def osd_sink_pad_buffer_probe(self, pad,info,u_data):
         msg = String()
         gst_buffer = info.get_buffer()
@@ -76,12 +77,13 @@ class NodeFilePipeline(Node):
                 break
 			
         return Gst.PadProbeReturn.OK
-
+'''
 
     def __init__(self, pgie_config, file_path, tracker_config_path):
         super().__init__('inference_publisher')
         self.publisher_ = self.create_publisher(String, 'topic', 0)
         Gst.init(None)
+        self.get_logger().info(f"Initializing NodeFilePipeline with video: {file_path}") # Log node name
         
         self.pipeline = Gst.Pipeline()
 
@@ -152,14 +154,13 @@ class NodeFilePipeline(Node):
         self.nvvidconv.link(self.nvosd)
         self.nvosd.link(self.sink)
 
+        self.osdsinkpad = self.nvosd.get_static_pad("sink")
+
     def on_pad_added(self, src, pad):
         caps = pad.query_caps(None)
         name = caps.to_string()
         if name.startswith("video/x-h264"):
             pad.link(self.h264parser.get_static_pad("sink"))
-        self.osdsinkpad = self.nvosd.get_static_pad("sink")
-
-        self.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, self.osd_sink_pad_buffer_probe, 0)
 
     def run(self):
 
