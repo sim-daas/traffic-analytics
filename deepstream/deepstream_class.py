@@ -26,7 +26,6 @@ def bus_call(bus, message, loop):
     return True
 
 class NodeFilePipeline(Node):
-    '''
     def osd_sink_pad_buffer_probe(self, pad,info,u_data):
         msg = String()
         gst_buffer = info.get_buffer()
@@ -77,7 +76,6 @@ class NodeFilePipeline(Node):
                 break
 			
         return Gst.PadProbeReturn.OK
-'''
 
     def __init__(self, pgie_config, file_path, tracker_config_path):
         super().__init__('inference_publisher')
