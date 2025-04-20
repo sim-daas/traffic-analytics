@@ -21,7 +21,7 @@ def osd_sink_pad_buffer_probe(self, pad,info,u_data):
                 frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
             except StopIteration:
                 break
-     
+
             l_obj=frame_meta.obj_meta_list
             while l_obj is not None:
                 try:
@@ -39,18 +39,18 @@ def osd_sink_pad_buffer_probe(self, pad,info,u_data):
                     result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
                     msg.data = result
                     self.publisher_.publish(msg)
-                        
+
                     rect_params.border_width = 3
                     rect_params.border_color.set(1.0, 1.0, 0.0, 1.0)
 
                     txt_params = obj_meta.text_params
                     if txt_params:
                         txt_params.font_params.font_name = "Sans Bold"
-                        
-                         
+
+
                 except StopIteration:
                     break
-                try: 
+                try:
                     l_obj=l_obj.next
                 except StopIteration:
                     break
@@ -59,61 +59,48 @@ def osd_sink_pad_buffer_probe(self, pad,info,u_data):
                 l_frame=l_frame.next
             except StopIteration:
                 break
-			
+
         return Gst.PadProbeReturn.OK
 
-
-
 def main():
-    #pipeline = Pipeline(args[1], args[2])
     pipeline = Pipeline('sample_720p.h264', 'config_inferyolov8.txt')
     pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
     pipeline.run()
 
 def main2():
-    #pipeline = Pipeline_tracker(args[1], args[2], args[3])
     pipeline = Pipeline_tracker('sample_720p.h264', 'config_inferyolov8.txt', 'config_tracker.txt')
     pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
     pipeline.run()
 
 def main3():
     rclpy.init()
-  #  pipeline = VideoPipeline(args[1])
     pipeline = VideoPipeline('config_inferyolov8.txt', '/dev/video0', 'config_tracker.txt')
     pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
     pipeline.run()
     rclpy.shutdown()
 
-
 def main4():
     rclpy.init()
-  #  pipeline = VideoPipeline(args[1])
     pipeline = NodePipeline('config_inferyolov8.txt', '/dev/video0', 'config_tracker.txt')
     pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
     pipeline.run()
     rclpy.shutdown()
-    
+
 def main5(video_file='sample_720p.h264'):
     rclpy.init()
     pipeline = NodeFilePipeline('config_inferyolov8.txt', video_file, 'config_tracker.txt')
-    # Explicitly add the probe since __init__ no longer does it
     if pipeline.osdsinkpad:
         pipeline.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, pipeline.osd_sink_pad_buffer_probe, 0)
     else:
         pipeline.get_logger().error("OSD sink pad not available, cannot add probe.")
-        # Handle error appropriately
     pipeline.run()
     rclpy.shutdown()
 
 def main6(input_video='sample_720p.h264', output_video='output.mp4'):
-    """
-    Initializes and runs the NodeFileSinkPipeline to process a video file
-    and save the output with OSD overlays to another file.
-    """
     rclpy.init()
     pipeline_node = None
-    pgie_config_path = 'config_inferyolov8.txt' # Example path
-    tracker_config_path = 'config_tracker.txt' # Example path
+    pgie_config_path = 'config_inferyolov8.txt'
+    tracker_config_path = 'config_tracker.txt'
 
     try:
         pipeline_node = NodeFileSinkPipeline(
@@ -124,7 +111,7 @@ def main6(input_video='sample_720p.h264', output_video='output.mp4'):
         )
         pipeline_node.get_logger().info(f"NodeFileSinkPipeline created for {input_video} -> {output_video}")
 
-        pipeline_node.run() # run() is inherited/defined in NodeFileSinkPipeline
+        pipeline_node.run()
 
     except Exception as e:
         if pipeline_node:
@@ -137,9 +124,9 @@ def main6(input_video='sample_720p.h264', output_video='output.mp4'):
             pipeline_node.destroy_node()
         rclpy.shutdown()
         print("ROS shutdown complete.")
-    
+
 if __name__ == '__main__':
-    
+
     parser = argparse.ArgumentParser(description='Run DeepStream pipelines.')
     parser.add_argument('--input', type=str, default='sample_720p.h264',
                         help='Path to the input video file.')

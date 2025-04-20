@@ -10,7 +10,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-
 def bus_call(bus, message, loop):
     t = message.type
     if t == Gst.MessageType.EOS:
@@ -36,7 +35,7 @@ class NodeFilePipeline(Node):
                 frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
             except StopIteration:
                 break
-     
+
             l_obj=frame_meta.obj_meta_list
             while l_obj is not None:
                 try:
@@ -54,18 +53,18 @@ class NodeFilePipeline(Node):
                     result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
                     msg.data = result
                     self.publisher_.publish(msg)
-                        
+
                     rect_params.border_width = 3
                     rect_params.border_color.set(1.0, 1.0, 0.0, 1.0)
 
                     txt_params = obj_meta.text_params
                     if txt_params:
                         txt_params.font_params.font_name = "Sans Bold"
-                        
-                         
+
+
                 except StopIteration:
                     break
-                try: 
+                try:
                     l_obj=l_obj.next
                 except StopIteration:
                     break
@@ -74,18 +73,17 @@ class NodeFilePipeline(Node):
                 l_frame=l_frame.next
             except StopIteration:
                 break
-			
+
         return Gst.PadProbeReturn.OK
 
     def __init__(self, pgie_config, file_path, tracker_config_path):
         super().__init__('inference_publisher')
         self.publisher_ = self.create_publisher(String, 'topic', 0)
         Gst.init(None)
-        self.get_logger().info(f"Initializing NodeFilePipeline with video: {file_path}") # Log node name
-        
+        self.get_logger().info(f"Initializing NodeFilePipeline with video: {file_path}")
+
         self.pipeline = Gst.Pipeline()
 
-        # Elements for MP4 support
         self.source = Gst.ElementFactory.make("filesrc", "file-source")
         self.demuxer = Gst.ElementFactory.make("qtdemux", "qt-demuxer")
         self.h264parser = Gst.ElementFactory.make("h264parse", "h264-parser")
@@ -125,7 +123,6 @@ class NodeFilePipeline(Node):
                 tracker_ll_config_file = config.get('tracker', key)
                 self.tracker.set_property('ll-config-file', tracker_ll_config_file)
 
-        # Adding elements to the pipeline
         self.pipeline.add(self.source)
         self.pipeline.add(self.demuxer)
         self.pipeline.add(self.h264parser)
@@ -137,7 +134,6 @@ class NodeFilePipeline(Node):
         self.pipeline.add(self.nvosd)
         self.pipeline.add(self.sink)
 
-        # Linking elements
         self.source.link(self.demuxer)
         self.demuxer.connect("pad-added", self.on_pad_added)
         self.h264parser.link(self.decoder)
@@ -189,7 +185,6 @@ class Pipeline:
         self.nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
         self.nvosd = Gst.ElementFactory.make("nvdsosd", "onscreendisplay")
         self.sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
-        #self.transform = Gst.ElementFactory.make("nvegltransform", "nvegl-transform")
 
         self.source.set_property('location', file_path)
         self.streammux.set_property('width', 1920)
@@ -206,7 +201,6 @@ class Pipeline:
         self.pipeline.add(self.nvvidconv)
         self.pipeline.add(self.nvosd)
         self.pipeline.add(self.sink)
-        #self.pipeline.add(self.transform)
 
         sinkpad = self.streammux.get_request_pad("sink_0")
         srcpad = self.decoder.get_static_pad("src")
@@ -218,14 +212,11 @@ class Pipeline:
         self.pgie.link(self.nvvidconv)
         self.nvvidconv.link(self.nvosd)
         self.nvosd.link(self.sink)
-        #self.nvosd.link(self.transform)
-        #self.transform.link(self.sink)
 
         self.osdsinkpad = self.nvosd.get_static_pad("sink")
-        #self.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, self.osd_sink_pad_buffer_probe, 0)
 
     def osd_sink_pad_buffer_probe(self, pad,info,u_data):
-    
+
         gst_buffer = info.get_buffer()
         batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
         l_frame = batch_meta.frame_meta_list
@@ -234,7 +225,7 @@ class Pipeline:
                 frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
             except StopIteration:
                 break
-     
+
             l_obj=frame_meta.obj_meta_list
             while l_obj is not None:
                 try:
@@ -243,9 +234,9 @@ class Pipeline:
                     print("Hello world")
                 except StopIteration:
                     break
-                
+
                 obj_meta.rect_params.border_color.set(0.0, 0.0, 1.0, 0.0)
-                try: 
+                try:
                     l_obj=l_obj.next
                 except StopIteration:
                     break
@@ -254,7 +245,7 @@ class Pipeline:
                 l_frame=l_frame.next
             except StopIteration:
                 break
-			
+
         return Gst.PadProbeReturn.OK
 
     def run(self):
@@ -370,7 +361,6 @@ class VideoPipeline:
 class NodePipeline(Node):
     def osd_sink_pad_buffer_probe(self, pad,info,u_data):
         msg = String()
-       # bounding_box = BoundingBox2D()
         gst_buffer = info.get_buffer()
         batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
         l_frame = batch_meta.frame_meta_list
@@ -379,7 +369,7 @@ class NodePipeline(Node):
                 frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
             except StopIteration:
                 break
-     
+
             l_obj=frame_meta.obj_meta_list
             while l_obj is not None:
                 try:
@@ -394,15 +384,15 @@ class NodePipeline(Node):
                     y1 = int(top)
                     x2 = int(left + width)
                     y2 = int(top + height)
-                    if obj_meta.class_id == 0: 
+                    if obj_meta.class_id == 0:
                         result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
                         msg.data = result
                         self.publisher_.publish(msg)
-          
+
                 except StopIteration:
                     break
                 obj_meta.rect_params.border_color.set(0.0, 0.0, 1.0, 0.0)
-                try: 
+                try:
                     l_obj=l_obj.next
                 except StopIteration:
                     break
@@ -411,7 +401,7 @@ class NodePipeline(Node):
                 l_frame=l_frame.next
             except StopIteration:
                 break
-			
+
         return Gst.PadProbeReturn.OK
 
 
@@ -511,10 +501,6 @@ class NodePipeline(Node):
 
         self.pipeline.set_state(Gst.State.NULL)
 
-
-
-
-
 class Pipeline_tracker:
     def __init__(self, file_path, config_file, tracker_config_path):
         Gst.init(None)
@@ -537,7 +523,7 @@ class Pipeline_tracker:
         self.streammux.set_property('batch-size', 1)
         self.streammux.set_property('batched-push-timeout', 4000000)
         self.pgie.set_property('config-file-path', config_file)
- 
+
         config = configparser.ConfigParser()
         config.read(tracker_config_path)
         config.sections()
@@ -590,7 +576,6 @@ class Pipeline_tracker:
         self.transform.link(self.sink)
 
         self.osdsinkpad = self.nvosd.get_static_pad("sink")
-        #self.osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, self.osd_sink_pad_buffer_probe, 0)
 
     def run(self):
 
@@ -609,10 +594,6 @@ class Pipeline_tracker:
         self.pipeline.set_state(Gst.State.NULL)
 
 class NodeFileSinkPipeline(Node):
-    """
-    Pipeline class similar to NodeFilePipeline, but saves the output
-    with OSD overlays to a file instead of displaying it.
-    """
     def __init__(self, pgie_config, input_file_path, tracker_config_path, output_file_path, node_name='file_sink_pipeline_node'):
         super().__init__(node_name)
         self.publisher_ = self.create_publisher(String, 'topic', 0)
@@ -621,7 +602,6 @@ class NodeFileSinkPipeline(Node):
 
         self.pipeline = Gst.Pipeline()
 
-        # --- Input Elements ---
         self.source = Gst.ElementFactory.make("filesrc", "file-source")
         self.demuxer = Gst.ElementFactory.make("qtdemux", "qt-demuxer")
         self.h264parser_in = Gst.ElementFactory.make("h264parse", "h264-parser-in")
@@ -632,7 +612,6 @@ class NodeFileSinkPipeline(Node):
         self.nvvidconv_osd = Gst.ElementFactory.make("nvvideoconvert", "convertor-osd")
         self.nvosd = Gst.ElementFactory.make("nvdsosd", "onscreendisplay")
 
-        # --- Output Elements ---
         self.nvvidconv_enc = Gst.ElementFactory.make("nvvideoconvert", "convertor-enc")
         self.capsfilter_enc = Gst.ElementFactory.make("capsfilter", "capsfilter-enc")
         self.encoder = Gst.ElementFactory.make("nvv4l2h264enc", "h264-encoder")
@@ -646,7 +625,6 @@ class NodeFileSinkPipeline(Node):
             self.get_logger().error("Failed to create one or more GStreamer elements for file saving pipeline.")
             sys.exit(1)
 
-        # --- Configure Input Elements ---
         self.source.set_property('location', input_file_path)
         self.streammux.set_property('width', 1920)
         self.streammux.set_property('height', 1080)
@@ -654,7 +632,6 @@ class NodeFileSinkPipeline(Node):
         self.streammux.set_property('batched-push-timeout', 4000000)
         self.pgie.set_property('config-file-path', pgie_config)
 
-        # --- Configure Tracker ---
         config = configparser.ConfigParser()
         config.read(tracker_config_path)
         config.sections()
@@ -675,14 +652,12 @@ class NodeFileSinkPipeline(Node):
                 tracker_ll_config_file = config.get('tracker', key)
                 self.tracker.set_property('ll-config-file', tracker_ll_config_file)
 
-        # --- Configure Output Elements ---
         caps = Gst.Caps.from_string("video/x-raw(memory:NVMM), format=I420")
         self.capsfilter_enc.set_property("caps", caps)
         self.encoder.set_property('bitrate', 4000000)
         self.filesink.set_property('location', output_file_path)
         self.filesink.set_property('sync', False)
 
-        # --- Request and Store StreamMux Sink Pad ---
         self.streammux_sink_pad_0 = self.streammux.get_request_pad("sink_0")
         if not self.streammux_sink_pad_0:
             self.get_logger().error("Unable to get request sink pad 'sink_0' from streammux.")
@@ -690,7 +665,6 @@ class NodeFileSinkPipeline(Node):
         else:
             self.get_logger().info("Successfully got request sink pad 'sink_0' from streammux.")
 
-        # --- Add Elements to Pipeline ---
         self.pipeline.add(self.source)
         self.pipeline.add(self.demuxer)
         self.pipeline.add(self.h264parser_in)
@@ -707,7 +681,6 @@ class NodeFileSinkPipeline(Node):
         self.pipeline.add(self.muxer)
         self.pipeline.add(self.filesink)
 
-        # --- Link Elements ---
         self.source.link(self.demuxer)
         self.demuxer.connect("pad-added", self.on_pad_added)
 
