@@ -4,7 +4,7 @@ sys.path.append('../')
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
-from deepstream_class import Pipeline, Pipeline_tracker , VideoPipeline, NodePipeline, NodeFilePipeline
+from deepstream_class import Pipeline, Pipeline_tracker , VideoPipeline, NodePipeline, NodeFilePipeline, NodeFileSinkPipeline
 import pyds
 import rclpy
 from rclpy.node import Node
@@ -104,13 +104,59 @@ def main5(video_file='sample_720p.h264'):
         # Handle error appropriately
     pipeline.run()
     rclpy.shutdown()
+
+def main6(input_video='sample_720p.h264', output_video='output.mp4'):
+    """
+    Initializes and runs the NodeFileSinkPipeline to process a video file
+    and save the output with OSD overlays to another file.
+    """
+    rclpy.init()
+    pipeline_node = None
+    pgie_config_path = 'config_inferyolov8.txt' # Example path
+    tracker_config_path = 'config_tracker.txt' # Example path
+
+    try:
+        pipeline_node = NodeFileSinkPipeline(
+            pgie_config=pgie_config_path,
+            input_file_path=input_video,
+            tracker_config_path=tracker_config_path,
+            output_file_path=output_video
+        )
+        pipeline_node.get_logger().info(f"NodeFileSinkPipeline created for {input_video} -> {output_video}")
+
+        pipeline_node.run() # run() is inherited/defined in NodeFileSinkPipeline
+
+    except Exception as e:
+        if pipeline_node:
+            pipeline_node.get_logger().error(f"Error in NodeFileSinkPipeline: {e}", exc_info=True)
+        else:
+            print(f"Error creating NodeFileSinkPipeline node: {e}")
+    finally:
+        if pipeline_node:
+            pipeline_node.get_logger().info("Shutting down NodeFileSinkPipeline Node")
+            pipeline_node.destroy_node()
+        rclpy.shutdown()
+        print("ROS shutdown complete.")
     
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser(description='Run deepstream pipeline with a video file')
-    parser.add_argument('video', nargs='?', type=str, default='sample_720p.h264', 
-                        help='Path to the video file (positional argument)')
+    parser = argparse.ArgumentParser(description='Run DeepStream pipelines.')
+    parser.add_argument('--input', type=str, default='sample_720p.h264',
+                        help='Path to the input video file.')
+    parser.add_argument('--output', type=str, default='output.mp4',
+                        help='Path to the output video file (for file sink pipeline).')
+    parser.add_argument('--pipeline', type=str, default='sink', choices=['display', 'sink'],
+                        help='Choose pipeline type: "display" (main5) or "sink" (main6).')
+
     args = parser.parse_args()
-    
-    main5(args.video)
+
+    if args.pipeline == 'display':
+        print(f"Running display pipeline (main5) with input: {args.input}")
+        main5(args.input)
+    elif args.pipeline == 'sink':
+        print(f"Running file sink pipeline (main6) with input: {args.input}, output: {args.output}")
+        main6(args.input, args.output)
+    else:
+        print("Invalid pipeline choice. Exiting.")
+        sys.exit(1)
 

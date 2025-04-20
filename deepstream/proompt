@@ -1,0 +1,1 @@
+now start creating the final project one step at a time - make a basic gradio or streamlit web app in which i can upload my video which is feeded into the deepstream pipeline and dislayed on the web app. if it is preferable create another file for this ui app
