@@ -56,7 +56,7 @@ class TrafboardPipeline(NodeFilePipeline):
                     msg.data = result
                     self.publisher_.publish(msg)
 
-                    rect_params.border_width = 10
+                    rect_params.border_width = 3
                     rect_params.border_color.set(1.0, 1.0, 0.0, 1.0) # Yellow
 
                     txt_params = obj_meta.text_params
