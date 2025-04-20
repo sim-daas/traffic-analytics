@@ -10,7 +10,7 @@ echo "Staging all changes..."
 git add .
 
 # Commit changes with a default message if no message is provided as an argument
-commit_message=${1:-"demos"}
+commit_message=${1:-"working"}
 echo "Committing changes with message: '$commit_message'"
 git commit -m "$commit_message"
 

@@ -51,10 +51,9 @@ class NodeFilePipeline(Node):
                     y1 = int(top)
                     x2 = int(left + width)
                     y2 = int(top + height)
-                    if obj_meta.class_id == 0: 
-                        result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
-                        msg.data = result
-                        self.publisher_.publish(msg)
+                    result = str(x1) + ", " + str(x2) + ", " + str(y1) + ", " + str(y2)
+                    msg.data = result
+                    self.publisher_.publish(msg)
                         
                     rect_params.border_width = 3
                     rect_params.border_color.set(1.0, 1.0, 0.0, 1.0)
