@@ -1,0 +1,4 @@
+FROM dustynv/deepstream:r32.7.1
+
+RUN apt update && apt upgrade -y
+
