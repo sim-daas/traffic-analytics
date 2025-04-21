@@ -9,15 +9,20 @@ from std_msgs.msg import String
 import rclpy
 from collections import deque
 import cv2 # Import OpenCV
+import itertools # For color cycling
 
 from deepstream_class import NodeFileSinkPipeline
 
 # Define colors based on theme (adjust alpha as needed)
-# Primary blue: #81a1c1 -> (129/255, 161/255, 193/255) -> (0.506, 0.631, 0.757)
-COLOR_LINE_DS = (0.506, 0.631, 0.757, 0.8) # RGBA with alpha
-# Secondary cyan: #88c0d0 -> (136/255, 192/255, 208/255) -> (0.533, 0.753, 0.816)
-COLOR_ROI_DS = (0.533, 0.753, 0.816, 0.6) # RGBA with alpha
-# Trail/BBox colors (can keep existing or adjust)
+# Use a cycle of colors for multiple lines in DeepStream output
+DS_LINE_COLORS = itertools.cycle([
+    (0.506, 0.631, 0.757, 0.8), # Primary blue
+    (0.639, 0.749, 0.549, 0.8), # Green
+    (0.921, 0.796, 0.545, 0.8), # Yellow
+    (0.816, 0.529, 0.439, 0.8), # Orange
+    (0.706, 0.541, 0.678, 0.8), # Purple
+])
+COLOR_ROI_DS = (0.533, 0.753, 0.816, 0.6) # Cyan
 COLOR_BBOX_DS = (1.0, 1.0, 0.0, 1.0) # Yellow
 # Thickness
 DS_LINE_THICKNESS = 2
@@ -27,7 +32,7 @@ DS_TRAIL_THICKNESS = 2
 
 class TrafboardPipeline(NodeFileSinkPipeline):
     def __init__(self, pgie_config, input_file_path, tracker_config_path, output_file_path,
-                 line_coords, roi_coords, # Add roi_coords
+                 lines_data, roi_coords, # Changed line_coords to lines_data
                  node_name='trafboard_line_sink_node'):
         super().__init__(pgie_config, input_file_path, tracker_config_path, output_file_path, node_name=node_name)
 
@@ -62,34 +67,36 @@ class TrafboardPipeline(NodeFileSinkPipeline):
             self.scale_y = 1.0
         self.get_logger().info(f"Scaling factors (pipeline/source): scale_x={self.scale_x:.4f}, scale_y={self.scale_y:.4f}")
 
+        # --- Lines Setup (Multiple) ---
+        self.lines = [] # Store line info: [{'id': id, 'orig': (x1,y,x2,y), 'scaled': (sx1,sy,sx2,sy)}]
+        self.line_colors = {} # Store color per line ID: {line_id: (r,g,b,a)}
 
-     
-        self.line_enabled = False
-        self.orig_line_x1, self.orig_line_y, self.orig_line_x2 = 0, -1, 0
-        self.scaled_line_x1, self.scaled_line_y, self.scaled_line_x2 = 0, -1, 0
+        if lines_data:
+            for line_info in lines_data:
+                line_id = line_info['id']
+                orig_coords = line_info['coords']
+                orig_x1 = min(orig_coords[0], orig_coords[2])
+                orig_y = orig_coords[1] # y1 == y2 enforced by UI/argparse
+                orig_x2 = max(orig_coords[0], orig_coords[2])
 
-        if line_coords and len(line_coords) == 4 and line_coords[1] == line_coords[3]:
-          
-            self.orig_line_x1 = min(line_coords[0], line_coords[2])
-            self.orig_line_y = line_coords[1]
-            self.orig_line_x2 = max(line_coords[0], line_coords[2])
+                scaled_x1 = int(orig_x1 * self.scale_x)
+                scaled_y = int(orig_y * self.scale_y)
+                scaled_x2 = int(orig_x2 * self.scale_x)
 
-           
-            self.scaled_line_x1 = int(self.orig_line_x1 * self.scale_x)
-            self.scaled_line_y = int(self.orig_line_y * self.scale_y)
-            self.scaled_line_x2 = int(self.orig_line_x2 * self.scale_x)
+                scaled_x1 = max(0, min(scaled_x1, self.pipeline_width - 1))
+                scaled_y = max(0, min(scaled_y, self.pipeline_height - 1))
+                scaled_x2 = max(scaled_x1, min(scaled_x2, self.pipeline_width - 1))
 
-           
-            self.scaled_line_x1 = max(0, min(self.scaled_line_x1, self.pipeline_width - 1))
-            self.scaled_line_y = max(0, min(self.scaled_line_y, self.pipeline_height - 1))
-            self.scaled_line_x2 = max(self.scaled_line_x1, min(self.scaled_line_x2, self.pipeline_width - 1)) 
+                scaled_coords = (scaled_x1, scaled_y, scaled_x2, scaled_y)
+                self.lines.append({'id': line_id, 'orig': (orig_x1, orig_y, orig_x2, orig_y), 'scaled': scaled_coords})
+                self.line_colors[line_id] = next(DS_LINE_COLORS) # Assign color
 
-            self.line_enabled = True
-            self.get_logger().info(f"Original Line: ({self.orig_line_x1}, {self.orig_line_y}) to ({self.orig_line_x2}, {self.orig_line_y})")
-            self.get_logger().info(f"Scaled Line (for {self.pipeline_width}x{self.pipeline_height}): ({self.scaled_line_x1}, {self.scaled_line_y}) to ({self.scaled_line_x2}, {self.scaled_line_y})")
+                self.get_logger().info(f"Line ID {line_id}: Original=({orig_x1},{orig_y})-({orig_x2},{orig_y}), Scaled=({scaled_x1},{scaled_y})-({scaled_x2},{scaled_y})")
         else:
-            self.get_logger().warning("Line coordinates invalid or not provided. Line crossing disabled.")
+             self.get_logger().warning("No line coordinates provided. Line crossing disabled.")
+        # --- End Lines Setup ---
 
+        # --- ROI Setup ---
         self.roi_enabled = False
         self.orig_roi_x1, self.orig_roi_y1, self.orig_roi_x2, self.orig_roi_y2 = 0, 0, 0, 0
         self.scaled_roi_x1, self.scaled_roi_y1, self.scaled_roi_x2, self.scaled_roi_y2 = 0, 0, 0, 0
@@ -116,8 +123,10 @@ class TrafboardPipeline(NodeFileSinkPipeline):
         else:
             self.get_logger().warning("ROI coordinates invalid or not provided. ROI filtering disabled.")
 
-        self.vehicles_crossed = 0
-        self.object_crossed_line = {}
+        # --- Crossing Counters (Multiple Lines) ---
+        self.vehicles_crossed = {line['id']: 0 for line in self.lines} # Count per line ID
+        self.object_crossed_line = {} # {object_id: {line_id: True}}
+        # --- End Crossing Counters ---
 
         self.past_tracking_points = {}
         self.max_trail_length = 40
@@ -144,20 +153,27 @@ class TrafboardPipeline(NodeFileSinkPipeline):
             except StopIteration:
                 break
 
-            if self.line_enabled:
-                display_meta_line = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-                display_meta_line.num_lines = 1
-                line_params = display_meta_line.line_params[0]
+            # --- Draw Crossing Lines (Multiple) ---
+            display_meta_lines = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
+            display_meta_lines.num_lines = len(self.lines)
+            line_idx = 0
+            for line in self.lines:
+                line_params = display_meta_lines.line_params[line_idx]
+                scaled_coords = line['scaled']
+                line_id = line['id']
+                color = self.line_colors.get(line_id, (1.0, 1.0, 1.0, 1.0)) # Default white
 
-                line_params.x1 = self.scaled_line_x1
-                line_params.y1 = self.scaled_line_y
-                line_params.x2 = self.scaled_line_x2
-                line_params.y2 = self.scaled_line_y
+                line_params.x1 = scaled_coords[0]
+                line_params.y1 = scaled_coords[1]
+                line_params.x2 = scaled_coords[2]
+                line_params.y2 = scaled_coords[3]
                 line_params.line_width = DS_LINE_THICKNESS
-                line_params.line_color.set(*COLOR_LINE_DS)
+                line_params.line_color.set(*color)
+                line_idx += 1
+            if display_meta_lines.num_lines > 0:
+                pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_lines)
 
-                pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_line)
-
+            # --- Draw ROI Rectangle ---
             if self.roi_enabled:
                 display_meta_roi = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
                 display_meta_roi.num_rects = 1
@@ -171,18 +187,37 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                 rect_params_roi.has_bg_color = 0
                 pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_roi)
 
+            # --- Draw Vehicle Count Text (Multiple Lines) ---
             display_meta_text = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-            display_meta_text.num_labels = 1
-            text_params = display_meta_text.text_params[0]
-            text_params.display_text = f"Vehicles Crossed: {self.vehicles_crossed}"
-            text_params.x_offset = 10
-            text_params.y_offset = 10
-            text_params.font_params.font_name = "Sans Bold"
-            text_params.font_params.font_size = 22
-            text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
-            text_params.set_bg_clr = 5
-            text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6)
+            num_labels = len(self.vehicles_crossed)
+            display_meta_text.num_labels = num_labels if num_labels > 0 else 1 # Show at least one label
+            y_offset_start = 10
+            label_idx = 0
+            if num_labels > 0:
+                for line_id, count in sorted(self.vehicles_crossed.items()):
+                    text_params = display_meta_text.text_params[label_idx]
+                    text_params.display_text = f"Line {line_id} Crossed: {count}"
+                    text_params.x_offset = 10
+                    text_params.y_offset = y_offset_start + label_idx * 30 # Stack labels
+                    text_params.font_params.font_name = "Sans" # Non-bold
+                    text_params.font_params.font_size = 16 # Smaller font
+                    text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
+                    text_params.set_bg_clr = 1 # Enable background color
+                    text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6) # Black background
+                    label_idx += 1
+            else: # No lines defined
+                 text_params = display_meta_text.text_params[0]
+                 text_params.display_text = "No lines defined"
+                 text_params.x_offset = 10
+                 text_params.y_offset = y_offset_start
+                 text_params.font_params.font_name = "Sans"
+                 text_params.font_params.font_size = 16
+                 text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
+                 text_params.set_bg_clr = 1
+                 text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6)
+
             pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_text)
+            # --- End Text Drawing ---
 
             l_obj=frame_meta.obj_meta_list
             while l_obj is not None:
@@ -238,21 +273,31 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                             line_params_trail.line_color.set(color[0], color[1], color[2], color[3])
                             pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_trail)
 
-                    if self.line_enabled and object_id not in self.object_crossed_line:
-                        if len(trail_points) >= 2:
-                            prev_point_y = trail_points[-2][1]
+                    if self.lines and len(trail_points) >= 2:
+                        prev_point_y = trail_points[-2][1]
 
-                            crossed_y = ((prev_point_y < self.scaled_line_y <= current_point_y) or \
-                                         (current_point_y < self.scaled_line_y <= prev_point_y))
+                        for line in self.lines:
+                            line_id = line['id']
+                            scaled_line_y = line['scaled'][1]
+                            scaled_line_x1 = line['scaled'][0]
+                            scaled_line_x2 = line['scaled'][2]
+
+                            if object_id in self.object_crossed_line and line_id in self.object_crossed_line[object_id]:
+                                continue
+
+                            crossed_y = ((prev_point_y < scaled_line_y <= current_point_y) or \
+                                         (current_point_y < scaled_line_y <= prev_point_y))
 
                             if crossed_y:
-                                is_within_x_bounds = (self.scaled_line_x1 <= current_point_x <= self.scaled_line_x2)
+                                is_within_x_bounds = (scaled_line_x1 <= current_point_x <= scaled_line_x2)
 
                                 if is_within_x_bounds:
-                                    self.vehicles_crossed += 1
-                                    self.object_crossed_line[object_id] = True
-                                    self.get_logger().info(f"Object ID {object_id} crossed the line. Count: {self.vehicles_crossed}")
-                                    
+                                    self.vehicles_crossed[line_id] += 1
+                                    if object_id not in self.object_crossed_line:
+                                        self.object_crossed_line[object_id] = {}
+                                    self.object_crossed_line[object_id][line_id] = True
+                                    self.get_logger().info(f"Object ID {object_id} crossed Line {line_id}. Count for Line {line_id}: {self.vehicles_crossed[line_id]}")
+
                     rect_params.border_width = DS_BBOX_THICKNESS
                     rect_params.border_color.set(*COLOR_BBOX_DS)
 
@@ -280,18 +325,33 @@ def main(args=None):
     parser.add_argument('--tracker-config', type=str, default='config_tracker.txt', help='Path to tracker config')
     parser.add_argument('input_video', type=str, help='Path to input video')
     parser.add_argument('output_video', type=str, help='Path to save output video')
-    parser.add_argument('--line', type=int, nargs=4, metavar=('X1', 'Y1', 'X2', 'Y2'), default=None,
-                        help='Crossing line segment coordinates (x1, y1, x2, y2) based on ORIGINAL video resolution. y1 must equal y2.')
+    parser.add_argument('--lines', type=int, nargs='+', metavar='ID X1 Y1 X2 Y2', default=[], # Changed metavar to a single string
+                        help='Crossing line segments. Provide as ID X1 Y1 X2 Y2 [ID X1 Y1 X2 Y2 ...]. Y1 must equal Y2.')
     parser.add_argument('--roi', type=int, nargs=4, metavar=('Xmin', 'Ymin', 'Xmax', 'Ymax'), default=None,
                         help='Region of Interest coordinates (xmin, ymin, xmax, ymax) based on ORIGINAL video resolution.')
 
     parsed_args = parser.parse_args()
 
-    line_coordinates = tuple(parsed_args.line) if parsed_args.line else None
-
-    if line_coordinates and (len(line_coordinates) != 4 or line_coordinates[1] != line_coordinates[3]):
-        print("Error: --line requires 4 coordinates (X1, Y1, X2, Y2) where Y1 must equal Y2 for a horizontal line.")
-        sys.exit(1)
+    lines_input = parsed_args.lines
+    lines_data = [] # To store [{'id': id, 'coords': (x1,y1,x2,y2)}, ...]
+    if lines_input:
+        if len(lines_input) % 5 != 0:
+            print("Error: --lines requires arguments in groups of 5 (ID, X1, Y1, X2, Y2).")
+            sys.exit(1)
+        for i in range(0, len(lines_input), 5):
+            try:
+                line_id = lines_input[i]
+                x1 = lines_input[i+1]
+                y1 = lines_input[i+2]
+                x2 = lines_input[i+3]
+                y2 = lines_input[i+4]
+                if y1 != y2:
+                     print(f"Error: Line ID {line_id} is not horizontal (Y1={y1}, Y2={y2}). Only horizontal lines supported.")
+                     sys.exit(1)
+                lines_data.append({'id': line_id, 'coords': (x1, y1, x2, y2)})
+            except IndexError:
+                 print("Error parsing --lines arguments.")
+                 sys.exit(1)
 
     roi_coordinates = tuple(parsed_args.roi) if parsed_args.roi else None
     if roi_coordinates:
@@ -308,7 +368,7 @@ def main(args=None):
             input_file_path=parsed_args.input_video,
             tracker_config_path=parsed_args.tracker_config,
             output_file_path=parsed_args.output_video,
-            line_coords=line_coordinates,
+            lines_data=lines_data, # Pass parsed lines data
             roi_coords=roi_coordinates
         )
         pipeline_node.get_logger().info(f"Trafboard Pipeline Node (Sink Mode) created for {parsed_args.input_video} -> {parsed_args.output_video}")

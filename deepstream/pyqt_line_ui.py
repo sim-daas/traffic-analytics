@@ -3,6 +3,7 @@ import os
 import subprocess
 import cv2
 from PyQt6 import QtWidgets, QtGui, QtCore, QtMultimedia, QtMultimediaWidgets
+import itertools  # For color cycling
 
 # --- Configuration ---
 TRAFBOARD_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "trafboard.py")
@@ -13,47 +14,65 @@ OUTPUT_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "videos")
 OUTPUT_VIDEO_PATH = os.path.join(OUTPUT_VIDEO_DIR, "output.mp4")
 
 # Theme colors (for preview drawing)
-COLOR_LINE_PREVIEW = QtGui.QColor("#81a1c1") # Primary blue
-COLOR_ROI_PREVIEW = QtGui.QColor("#88c0d0") # Secondary cyan
+PREVIEW_COLORS = itertools.cycle([
+    QtGui.QColor("#81a1c1"),  # Primary blue
+    QtGui.QColor("#a3be8c"),  # Green
+    QtGui.QColor("#ebcb8b"),  # Yellow
+    QtGui.QColor("#d08770"),  # Orange
+    QtGui.QColor("#b48ead"),  # Purple
+])
+COLOR_ROI_PREVIEW = QtGui.QColor("#88c0d0")  # Secondary cyan
 PREVIEW_LINE_THICKNESS = 2
+
 
 class ImageLabel(QtWidgets.QLabel):
     """ Custom QLabel to handle mouse events for drawing lines and ROIs """
-    line_drawn = QtCore.pyqtSignal(int, int, int, int) # x1, y, x2, y
-    roi_drawn = QtCore.pyqtSignal(int, int, int, int) # x1, y1, x2, y2
+    line_drawn = QtCore.pyqtSignal(int, int, int, int, int)  # id, x1, y, x2, y
+    roi_drawn = QtCore.pyqtSignal(int, int, int, int)  # x1, y1, x2, y2
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.start_point = None
         self.end_point = None
-        self.current_line_coords = None # Store the final line
-        self.current_roi_coords = None # Store the final ROI
+        self.current_lines = {}  # Store lines as {id: (x1, y, x2, y)}
+        self.current_roi_coords = None
         self.original_pixmap = None
         self.drawing = False
-        self.draw_mode = 'line' # Default mode: 'line' or 'roi'
+        self.draw_mode = 'roi'  # Default mode: 'roi' or 'line'
+        self.current_line_id = 1  # ID for the next line to be drawn
 
     def setPixmap(self, pixmap: QtGui.QPixmap | None):
         self.original_pixmap = pixmap.copy() if pixmap else None
         super().setPixmap(pixmap)
 
-    def set_draw_mode(self, mode):
+    def set_draw_mode(self, mode, line_id=None):
         if mode in ['line', 'roi']:
             self.draw_mode = mode
-            self.drawing = False # Stop any current drawing on mode change
+            if mode == 'line':
+                self.current_line_id = line_id if line_id is not None else 1
+            self.drawing = False
             self.start_point = None
             self.end_point = None
-            self.update() # Redraw to clear temporary shapes
+            self.update()
+
+    def clear_line(self, line_id):
+        if line_id in self.current_lines:
+            del self.current_lines[line_id]
+            self.update()
+
+    def clear_all_lines(self):
+        self.current_lines.clear()
+        self.update()
+
+    def clear_roi(self):
+        self.current_roi_coords = None
+        self.update()
 
     def mousePressEvent(self, event: QtGui.QMouseEvent):
         if self.original_pixmap and event.button() == QtCore.Qt.MouseButton.LeftButton:
             self.start_point = event.pos()
             self.end_point = event.pos()
             self.drawing = True
-            # Clear previous shape of the current mode visually for redraw
-            if self.draw_mode == 'line':
-                self.current_line_coords = None
-            else: # roi mode
-                self.current_roi_coords = None
             self.update()
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent):
@@ -68,31 +87,28 @@ class ImageLabel(QtWidgets.QLabel):
 
             pixmap_width = self.original_pixmap.width() if self.original_pixmap else 0
             pixmap_height = self.original_pixmap.height() if self.original_pixmap else 0
-
-            # Clamp start and end points
             sx = max(0, min(self.start_point.x(), pixmap_width - 1))
             sy = max(0, min(self.start_point.y(), pixmap_height - 1))
             ex = max(0, min(self.end_point.x(), pixmap_width - 1))
             ey = max(0, min(self.end_point.y(), pixmap_height - 1))
 
             if self.draw_mode == 'line':
-                # Ensure line is horizontal (use start_point's y)
                 y = sy
                 x1 = min(sx, ex)
                 x2 = max(sx, ex)
-                self.current_line_coords = (x1, y, x2, y)
-                self.line_drawn.emit(*self.current_line_coords)
-            else: # roi mode
+                line_coords = (x1, y, x2, y)
+                self.current_lines[self.current_line_id] = line_coords
+                self.line_drawn.emit(self.current_line_id, *line_coords)
+            else:  # roi mode
                 x1 = min(sx, ex)
                 y1 = min(sy, ey)
                 x2 = max(sx, ex)
                 y2 = max(sy, ey)
-                # Ensure ROI has non-zero width and height
                 if x1 < x2 and y1 < y2:
                     self.current_roi_coords = (x1, y1, x2, y2)
                     self.roi_drawn.emit(*self.current_roi_coords)
                 else:
-                    self.current_roi_coords = None # Discard zero-size ROI
+                    self.current_roi_coords = None
 
             self.update()
 
@@ -104,30 +120,35 @@ class ImageLabel(QtWidgets.QLabel):
         painter = QtGui.QPainter(self)
         painter.drawPixmap(self.rect(), self.original_pixmap)
 
-        # Draw final shapes first (if they exist)
-        if self.current_line_coords:
-            pen = QtGui.QPen(COLOR_LINE_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            painter.drawLine(*self.current_line_coords)
         if self.current_roi_coords:
             pen = QtGui.QPen(COLOR_ROI_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.drawRect(QtCore.QRectF(QtCore.QPointF(self.current_roi_coords[0], self.current_roi_coords[1]),
                                            QtCore.QPointF(self.current_roi_coords[2], self.current_roi_coords[3])))
 
-        # Draw temporary shape during drag
+        color_map = {}
+        sorted_line_ids = sorted(self.current_lines.keys())
+        for line_id in sorted_line_ids:
+            coords = self.current_lines[line_id]
+            if line_id not in color_map:
+                color_map[line_id] = next(PREVIEW_COLORS)
+            pen = QtGui.QPen(color_map[line_id], PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.drawLine(*coords)
+            painter.drawText(coords[0] - 20, coords[1] + 5, str(line_id))
+
         if self.drawing and self.start_point and self.end_point:
             if self.draw_mode == 'line':
-                pen = QtGui.QPen(COLOR_LINE_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.DotLine)
+                current_color = color_map.get(self.current_line_id, next(PREVIEW_COLORS))
+                pen = QtGui.QPen(current_color, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.DotLine)
                 painter.setPen(pen)
                 y = self.start_point.y()
                 x1 = min(self.start_point.x(), self.end_point.x())
                 x2 = max(self.start_point.x(), self.end_point.x())
                 painter.drawLine(x1, y, x2, y)
-            else: # roi mode
+            else:
                 pen = QtGui.QPen(COLOR_ROI_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.DotLine)
                 painter.setPen(pen)
-                # Convert QPoint to QPointF for QRectF constructor
                 start_point_f = QtCore.QPointF(self.start_point)
                 end_point_f = QtCore.QPointF(self.end_point)
                 painter.drawRect(QtCore.QRectF(start_point_f, end_point_f).normalized())
@@ -137,7 +158,7 @@ class ImageLabel(QtWidgets.QLabel):
 
 class ProcessWorker(QtCore.QThread):
     log_message = QtCore.pyqtSignal(str)
-    process_finished = QtCore.pyqtSignal(int) # Emit return code
+    process_finished = QtCore.pyqtSignal(int)
 
     def __init__(self, command):
         super().__init__()
@@ -145,59 +166,54 @@ class ProcessWorker(QtCore.QThread):
 
     def run(self):
         try:
-            # Use Popen to allow reading output incrementally
             process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, # Redirect stderr to stdout
+                stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1, # Line buffered
+                bufsize=1,
                 universal_newlines=True
             )
 
-            # Read output line by line
             for line in process.stdout:
                 self.log_message.emit(line.strip())
 
-            process.wait() # Wait for the process to complete
+            process.wait()
             self.process_finished.emit(process.returncode)
 
         except Exception as e:
             self.log_message.emit(f"Error starting/reading process: {e}")
-            self.process_finished.emit(-1) # Indicate an error
+            self.process_finished.emit(-1)
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PyQt6 Line Definition for DeepStream (Dark)")
-        self.setGeometry(100, 100, 1300, 800) # Adjusted size
+        self.setGeometry(100, 100, 1300, 800)
 
         self.video_path = None
         self.original_frame = None
         self.original_width = 0
         self.original_height = 0
-        self.display_width = 800 # Increased display width
+        self.display_width = 800
         self.display_height = 0
         self.scale_x_display = 1.0
         self.scale_y_display = 1.0
-        self.line_coords_original = None # Line coordinates relative to original frame
-        self.roi_coords_original = None # Store drawn ROI coords
-        self.output_video_path = None # Store path for video player
-        self.processing_thread = None # To hold the worker thread
+        self.lines_original = {}
+        self.roi_coords_original = None
+        self.output_video_path = None
+        self.processing_thread = None
 
-        # --- Widgets ---
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QtWidgets.QGridLayout(self.central_widget)
 
-        # --- Row 0: File selection ---
         self.btn_select_video = QtWidgets.QPushButton("Select Video")
         self.lbl_video_path = QtWidgets.QLabel("No video selected")
         self.layout.addWidget(self.btn_select_video, 0, 0)
-        self.layout.addWidget(self.lbl_video_path, 0, 1, 1, 2) # Span 2 columns
+        self.layout.addWidget(self.lbl_video_path, 0, 1, 1, 2)
 
-        # --- Row 1: Image display and Video Player ---
         self.image_label = ImageLabel()
         self.image_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.image_label.setStyleSheet("border: 1px solid gray;")
@@ -220,30 +236,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.video_group.setLayout(self.video_layout)
         self.layout.addWidget(self.video_group, 1, 1, 1, 2)
 
-        # --- Row 2: Controls and Logs ---
         self.controls_group = QtWidgets.QGroupBox("Controls")
         self.controls_layout = QtWidgets.QVBoxLayout()
 
-        # --- Drawing Mode Selection ---
-        self.draw_mode_group = QtWidgets.QGroupBox("Draw Mode")
-        self.draw_mode_layout = QtWidgets.QHBoxLayout()
-        self.radio_draw_line = QtWidgets.QRadioButton("Line")
-        self.radio_draw_roi = QtWidgets.QRadioButton("ROI")
-        self.radio_draw_line.setChecked(True) # Default to line
-        self.draw_mode_layout.addWidget(self.radio_draw_line)
-        self.draw_mode_layout.addWidget(self.radio_draw_roi)
-        self.draw_mode_group.setLayout(self.draw_mode_layout)
-        # --- End Drawing Mode Selection ---
+        self.line_mgmt_group = QtWidgets.QGroupBox("Lines")
+        self.line_mgmt_layout = QtWidgets.QVBoxLayout()
+        self.line_id_layout = QtWidgets.QHBoxLayout()
+        self.lbl_line_id = QtWidgets.QLabel("Line ID:")
+        self.spin_line_id = QtWidgets.QSpinBox()
+        self.spin_line_id.setMinimum(1)
+        self.spin_line_id.setMaximum(99)
+        self.btn_draw_line = QtWidgets.QPushButton("Draw/Redraw Line")
+        self.line_id_layout.addWidget(self.lbl_line_id)
+        self.line_id_layout.addWidget(self.spin_line_id)
+        self.line_id_layout.addWidget(self.btn_draw_line)
 
-        self.lbl_line_coords = QtWidgets.QLabel("Line Coords (Original): None")
-        self.lbl_roi_coords = QtWidgets.QLabel("ROI Coords (Original): None") # Label to display ROI
+        self.list_lines = QtWidgets.QListWidget()
+        self.list_lines.setFixedHeight(100)
+
+        self.line_clear_layout = QtWidgets.QHBoxLayout()
+        self.btn_clear_line = QtWidgets.QPushButton("Clear Selected Line")
+        self.btn_clear_all_lines = QtWidgets.QPushButton("Clear All Lines")
+        self.line_clear_layout.addWidget(self.btn_clear_line)
+        self.line_clear_layout.addWidget(self.btn_clear_all_lines)
+
+        self.line_mgmt_layout.addLayout(self.line_id_layout)
+        self.line_mgmt_layout.addWidget(self.list_lines)
+        self.line_mgmt_layout.addLayout(self.line_clear_layout)
+        self.line_mgmt_group.setLayout(self.line_mgmt_layout)
+
+        self.roi_mgmt_group = QtWidgets.QGroupBox("Region of Interest (ROI)")
+        self.roi_mgmt_layout = QtWidgets.QVBoxLayout()
+        self.btn_draw_roi = QtWidgets.QPushButton("Draw/Redraw ROI")
+        self.lbl_roi_coords = QtWidgets.QLabel("ROI Coords (Original): None")
+        self.btn_clear_roi = QtWidgets.QPushButton("Clear ROI")
+        self.roi_mgmt_layout.addWidget(self.btn_draw_roi)
+        self.roi_mgmt_layout.addWidget(self.lbl_roi_coords)
+        self.roi_mgmt_layout.addWidget(self.btn_clear_roi)
+        self.roi_mgmt_group.setLayout(self.roi_mgmt_layout)
 
         self.btn_process = QtWidgets.QPushButton("Process Video")
-        self.btn_process.setEnabled(False) # Disabled until line is drawn
+        self.btn_process.setEnabled(False)
 
-        self.controls_layout.addWidget(self.draw_mode_group) # Add draw mode selection
-        self.controls_layout.addWidget(self.lbl_line_coords)
-        self.controls_layout.addWidget(self.lbl_roi_coords) # Add ROI display label
+        self.controls_layout.addWidget(self.line_mgmt_group)
+        self.controls_layout.addWidget(self.roi_mgmt_group)
         self.controls_layout.addWidget(self.btn_process)
         self.controls_layout.addStretch()
         self.controls_group.setLayout(self.controls_layout)
@@ -253,46 +289,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_layout = QtWidgets.QVBoxLayout()
         self.log_output = QtWidgets.QTextEdit()
         self.log_output.setReadOnly(True)
-        # --- Set specific font for logs ---
         log_font = QtGui.QFont()
-        log_font.setPointSize(10) # Slightly smaller than default if desired
-        log_font.setBold(False)   # Ensure it's not bold
+        log_font.setPointSize(10)
+        log_font.setBold(False)
         self.log_output.setFont(log_font)
-        # --- End set specific font ---
         self.log_layout.addWidget(self.log_output)
         self.log_group.setLayout(self.log_layout)
         self.layout.addWidget(self.log_group, 2, 1, 1, 2)
 
-        # --- Row 3: Status Label ---
         self.lbl_status = QtWidgets.QLabel("")
         self.layout.addWidget(self.lbl_status, 3, 0, 1, 3)
 
-        # --- Set column/row stretch factors ---
-        self.layout.setColumnStretch(0, 2) # Image/Controls column wider
-        self.layout.setColumnStretch(1, 1) # Video column start
-        self.layout.setColumnStretch(2, 1) # Video column end
-        self.layout.setRowStretch(1, 3) # Middle row (image/video) taller
-        self.layout.setRowStretch(2, 1) # Log row
+        self.layout.setColumnStretch(0, 2)
+        self.layout.setColumnStretch(1, 1)
+        self.layout.setColumnStretch(2, 1)
+        self.layout.setRowStretch(1, 3)
+        self.layout.setRowStretch(2, 1)
 
-        # --- Connections ---
         self.btn_select_video.clicked.connect(self.select_video)
         self.image_label.line_drawn.connect(self.update_line_coords)
-        self.image_label.roi_drawn.connect(self.update_roi_coords) # Connect ROI signal
+        self.image_label.roi_drawn.connect(self.update_roi_coords)
         self.btn_process.clicked.connect(self.process_video)
-        # Drawing mode connections
-        self.radio_draw_line.toggled.connect(lambda: self.image_label.set_draw_mode('line'))
-        self.radio_draw_roi.toggled.connect(lambda: self.image_label.set_draw_mode('roi'))
-        # Video controls
+        self.btn_draw_line.clicked.connect(self.set_draw_line_mode)
+        self.btn_draw_roi.clicked.connect(lambda: self.image_label.set_draw_mode('roi'))
+        self.btn_clear_line.clicked.connect(self.clear_selected_line)
+        self.btn_clear_all_lines.clicked.connect(self.clear_all_lines)
+        self.btn_clear_roi.clicked.connect(self.clear_roi)
         self.btn_play.clicked.connect(self.media_player.play)
         self.btn_pause.clicked.connect(self.media_player.pause)
         self.btn_stop.clicked.connect(self.media_player.stop)
-        # Update UI based on media player state
         self.media_player.playbackStateChanged.connect(self.update_video_buttons)
         self.media_player.errorOccurred.connect(self.media_player_error)
 
-        # Initial button states
         self.update_video_buttons()
-
 
     def select_video(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Video File", "",
@@ -301,21 +330,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.video_path = file_path
             self.lbl_video_path.setText(os.path.basename(file_path))
             self.log_output.clear()
-            self.line_coords_original = None
-            self.roi_coords_original = None # Reset ROI on new video
-            self.lbl_line_coords.setText("Line Coords (Original): None")
-            self.lbl_roi_coords.setText("ROI Coords (Original): None") # Reset ROI label
-            # Reset drawing shapes in ImageLabel
-            self.image_label.current_line_coords = None
-            self.image_label.current_roi_coords = None
-            self.radio_draw_line.setChecked(True) # Reset draw mode
+            self.lines_original.clear()
+            self.roi_coords_original = None
+            self.list_lines.clear()
+            self.lbl_roi_coords.setText("ROI Coords (Original): None")
+            self.image_label.clear_all_lines()
+            self.image_label.clear_roi()
+            self.image_label.set_draw_mode('roi')
             self.btn_process.setEnabled(False)
             self.load_first_frame()
-            self.media_player.stop() # Stop previous video
-            self.media_player.setSource(QtCore.QUrl()) # Clear source
+            self.media_player.stop()
+            self.media_player.setSource(QtCore.QUrl())
             self.output_video_path = None
             self.update_video_buttons()
-            self.lbl_status.setText("") # Clear status
+            self.lbl_status.setText("")
 
     def load_first_frame(self):
         if not self.video_path:
@@ -333,20 +361,17 @@ class MainWindow(QtWidgets.QMainWindow):
             cap.release()
 
             if ret:
-                self.original_frame = frame # Keep original BGR frame
+                self.original_frame = frame
                 if self.original_width <= 0 or self.original_height <= 0:
                     self.show_error("Invalid video dimensions.")
                     return
 
-                # Calculate display size and scaling
                 self.scale_y_display = self.display_width / self.original_width
                 self.display_height = int(self.original_height * self.scale_y_display)
-                self.scale_x_display = self.scale_y_display # Assuming square pixels
+                self.scale_x_display = self.scale_y_display
 
-                # Resize frame for display
                 display_frame = cv2.resize(self.original_frame, (self.display_width, self.display_height))
 
-                # Convert BGR to RGB for QPixmap
                 rgb_image = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 bytes_per_line = ch * w
@@ -359,80 +384,104 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.show_error("Could not read the first frame.")
                 self.image_label.clear()
-                self.image_label.setFixedSize(self.display_width, 200) # Default size
+                self.image_label.setFixedSize(self.display_width, 200)
 
         except Exception as e:
             self.show_error(f"Error loading frame: {e}")
             self.image_label.clear()
             self.image_label.setFixedSize(self.display_width, 200)
 
-    def update_line_coords(self, x1_disp, y_disp, x2_disp, y_disp2):
-        # Convert display coordinates back to original frame coordinates
+    def set_draw_line_mode(self):
+        line_id = self.spin_line_id.value()
+        self.image_label.set_draw_mode('line', line_id)
+
+    def update_line_coords(self, line_id, x1_disp, y_disp, x2_disp, y_disp2):
         if self.scale_x_display > 0 and self.scale_y_display > 0:
             x1_orig = int(x1_disp / self.scale_x_display)
             y_orig = int(y_disp / self.scale_y_display)
             x2_orig = int(x2_disp / self.scale_x_display)
-
-            # Clamp to original dimensions
             x1_orig = max(0, min(x1_orig, self.original_width - 1))
             y_orig = max(0, min(y_orig, self.original_height - 1))
             x2_orig = max(x1_orig, min(x2_orig, self.original_width - 1))
 
-            self.line_coords_original = (x1_orig, y_orig, x2_orig, y_orig)
-            self.lbl_line_coords.setText(f"Line Coords (Original): {self.line_coords_original}")
-            self.btn_process.setEnabled(True) # Enable processing once line is drawn
+            line_coords_orig = (x1_orig, y_orig, x2_orig, y_orig)
+            self.lines_original[line_id] = line_coords_orig
+
+            self.update_line_list_widget()
+
+            self.btn_process.setEnabled(bool(self.lines_original))
         else:
             self.show_error("Cannot calculate original line coordinates (invalid scale).")
-            self.line_coords_original = None
-            self.btn_process.setEnabled(False)
+            self.btn_process.setEnabled(bool(self.lines_original))
 
     def update_roi_coords(self, x1_disp, y1_disp, x2_disp, y2_disp):
-        """Slot to receive ROI coordinates from ImageLabel."""
         if self.scale_x_display > 0 and self.scale_y_display > 0:
             x1_orig = int(x1_disp / self.scale_x_display)
             y1_orig = int(y1_disp / self.scale_y_display)
             x2_orig = int(x2_disp / self.scale_x_display)
             y2_orig = int(y2_disp / self.scale_y_display)
-
-            # Clamp to original dimensions
             x1_orig = max(0, min(x1_orig, self.original_width - 1))
             y1_orig = max(0, min(y1_orig, self.original_height - 1))
             x2_orig = max(x1_orig, min(x2_orig, self.original_width - 1))
             y2_orig = max(y1_orig, min(y2_orig, self.original_height - 1))
 
-            # Ensure valid ROI after clamping
             if x1_orig < x2_orig and y1_orig < y2_orig:
                 self.roi_coords_original = (x1_orig, y1_orig, x2_orig, y2_orig)
                 self.lbl_roi_coords.setText(f"ROI Coords (Original): {self.roi_coords_original}")
             else:
-                 self.show_error("ROI became invalid after clamping to video dimensions.")
-                 self.roi_coords_original = None
-                 self.lbl_roi_coords.setText("ROI Coords (Original): Invalid")
+                self.show_error("ROI became invalid after clamping to video dimensions.")
+                self.roi_coords_original = None
+                self.lbl_roi_coords.setText("ROI Coords (Original): Invalid")
         else:
             self.show_error("Cannot calculate original ROI coordinates (invalid scale).")
             self.roi_coords_original = None
             self.lbl_roi_coords.setText("ROI Coords (Original): Error")
 
+    def update_line_list_widget(self):
+        self.list_lines.clear()
+        for line_id in sorted(self.lines_original.keys()):
+            coords = self.lines_original[line_id]
+            self.list_lines.addItem(f"Line {line_id}: {coords}")
+
+    def clear_selected_line(self):
+        selected_items = self.list_lines.selectedItems()
+        if not selected_items:
+            return
+        item_text = selected_items[0].text()
+        try:
+            line_id = int(item_text.split(":")[0].split(" ")[1])
+            if line_id in self.lines_original:
+                del self.lines_original[line_id]
+                self.image_label.clear_line(line_id)
+                self.update_line_list_widget()
+                self.btn_process.setEnabled(bool(self.lines_original))
+        except (IndexError, ValueError):
+            self.show_error("Could not parse line ID from selected item.")
+
+    def clear_all_lines(self):
+        self.lines_original.clear()
+        self.image_label.clear_all_lines()
+        self.update_line_list_widget()
+        self.btn_process.setEnabled(False)
+
+    def clear_roi(self):
+        self.roi_coords_original = None
+        self.image_label.clear_roi()
+        self.lbl_roi_coords.setText("ROI Coords (Original): None")
+
     def _validate_and_get_roi(self):
-        """Returns the drawn ROI coordinates if available, otherwise None."""
-        # Now primarily relies on the drawn ROI stored in self.roi_coords_original
         return self.roi_coords_original
 
-
     def process_video(self):
-        if not self.video_path or not self.line_coords_original:
-            self.show_error("Please select a video and draw a line first.")
+        if not self.video_path or not self.lines_original:
+            self.show_error("Please select a video and draw at least one line first.")
             return
         if self.processing_thread and self.processing_thread.isRunning():
             self.show_error("Processing is already in progress.")
             return
 
-        # --- Get ROI coordinates (now from drawing) ---
         current_roi = self._validate_and_get_roi()
-        # No need for "ERROR" check as validation happens during drawing/update
-        # --- End Get ROI ---
 
-        # Ensure output directory exists
         try:
             os.makedirs(OUTPUT_VIDEO_DIR, exist_ok=True)
         except OSError as e:
@@ -448,35 +497,37 @@ class MainWindow(QtWidgets.QMainWindow):
             "--tracker-config", TRACKER_CONFIG_PATH,
             self.video_path,
             self.output_video_path,
-            "--line",
-            str(self.line_coords_original[0]),
-            str(self.line_coords_original[1]),
-            str(self.line_coords_original[2]),
-            str(self.line_coords_original[3])
         ]
 
-        # --- Add ROI arguments if available ---
+        if self.lines_original:
+            cmd.append("--lines")
+            for line_id in sorted(self.lines_original.keys()):
+                coords = self.lines_original[line_id]
+                cmd.extend([
+                    str(line_id),
+                    str(coords[0]),
+                    str(coords[1]),
+                    str(coords[2]),
+                    str(coords[3])
+                ])
+
         if current_roi:
             cmd.extend([
                 "--roi",
-                str(current_roi[0]), # xmin
-                str(current_roi[1]), # ymin
-                str(current_roi[2]), # xmax
-                str(current_roi[3])  # ymax
+                str(current_roi[0]), str(current_roi[1]),
+                str(current_roi[2]), str(current_roi[3])
             ])
-        # --- End Add ROI ---
 
         self.log_output.clear()
         self.log_output.append("Starting processing...")
         self.log_output.append(f"Command: {' '.join(cmd)}")
         self.btn_process.setEnabled(False)
-        self.lbl_status.setText("Status: Processing...") # Show status
+        self.lbl_status.setText("Status: Processing...")
 
         self.media_player.stop()
         self.media_player.setSource(QtCore.QUrl())
         self.update_video_buttons()
 
-        # Create and start the worker thread
         self.processing_thread = ProcessWorker(cmd)
         self.processing_thread.log_message.connect(self.append_log)
         self.processing_thread.process_finished.connect(self.handle_process_finished)
@@ -485,25 +536,25 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str)
     def append_log(self, message):
         self.log_output.append(message)
-        self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum()) # Auto-scroll
+        self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
 
     @QtCore.pyqtSlot(int)
     def handle_process_finished(self, return_code):
         self.lbl_status.setText(f"Status: Processing finished (Code: {return_code})")
-        self.btn_process.setEnabled(self.line_coords_original is not None) # Re-enable if line exists
+        self.btn_process.setEnabled(bool(self.lines_original))
 
         if return_code == 0:
             self.log_output.append(f"\nProcessing finished successfully. Output saved to: {self.output_video_path}")
             if os.path.exists(self.output_video_path):
                 self.media_player.setSource(QtCore.QUrl.fromLocalFile(self.output_video_path))
                 self.log_output.append("Output video loaded. Press Play.")
-                self.update_video_buttons() # Enable play button
+                self.update_video_buttons()
             else:
                 self.log_output.append("Output video file not found after processing.")
         else:
             self.log_output.append(f"\nProcessing failed with return code {return_code}.")
 
-        self.processing_thread = None # Clear the thread reference
+        self.processing_thread = None
 
     def update_video_buttons(self):
         state = self.media_player.playbackState()
@@ -526,52 +577,46 @@ class MainWindow(QtWidgets.QMainWindow):
 def set_dark_theme(app):
     app.setStyle("Fusion")
 
-    # Define colors from the provided palette
-    background = QtGui.QColor("#1f2229") # Use background-alt for main window
-    background_base = QtGui.QColor("#000000") # True black for base elements like text edit
+    background = QtGui.QColor("#1f2229")
+    background_base = QtGui.QColor("#000000")
     foreground = QtGui.QColor("#dfdfdf")
     primary = QtGui.QColor("#81a1c1")
-    secondary = QtGui.QColor("#88c0d0") # Use for borders?
+    secondary = QtGui.QColor("#88c0d0")
     alert = QtGui.QColor("#bf616a")
     disabled = QtGui.QColor("#707880")
-    orange = QtGui.QColor("#FFA500") # Keep for potential future use
+    orange = QtGui.QColor("#FFA500")
 
     dark_palette = QtGui.QPalette()
 
-    # Base colors
     dark_palette.setColor(QtGui.QPalette.ColorRole.Window, background)
     dark_palette.setColor(QtGui.QPalette.ColorRole.WindowText, foreground)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Base, background_base) # Base for inputs
-    dark_palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, background) # Used in views like tables/lists
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Base, background_base)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, background)
     dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipBase, background)
     dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipText, foreground)
     dark_palette.setColor(QtGui.QPalette.ColorRole.Text, foreground)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Button, background) # Button background controlled by stylesheet
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Button, background)
     dark_palette.setColor(QtGui.QPalette.ColorRole.ButtonText, foreground)
     dark_palette.setColor(QtGui.QPalette.ColorRole.BrightText, alert)
     dark_palette.setColor(QtGui.QPalette.ColorRole.Link, primary)
 
-    # Highlight colors
     dark_palette.setColor(QtGui.QPalette.ColorRole.Highlight, primary)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, background_base) # Black text on primary highlight
+    dark_palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, background_base)
 
-    # Disabled colors
     dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, disabled)
     dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, disabled)
     dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, disabled)
-    # Slightly darker highlight for disabled items
     dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, background.darker(120))
     dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, disabled)
 
     app.setPalette(dark_palette)
 
-    # Define some derived colors for the stylesheet
-    button_bg = background.lighter(115) # Slightly lighter than main background
+    button_bg = background.lighter(115)
     button_hover_bg = background.lighter(130)
     button_pressed_bg = background.lighter(105)
     button_disabled_bg = background.darker(110)
-    border_color = secondary.darker(120).name() # Use a darker secondary for borders
-    border_hover_color = secondary.name() # Lighter border on hover
+    border_color = secondary.darker(120).name()
+    border_hover_color = secondary.name()
 
     app.setStyleSheet(f"""
         QWidget {{
@@ -579,33 +624,32 @@ def set_dark_theme(app):
             background-color: {background.name()};
         }}
         QGroupBox {{
-            border: 2px solid {border_color}; /* Increased border width */
-            border-radius: 8px; /* Increased rounding */
-            margin-top: 1em; /* Add space above groupbox title */
-            margin-bottom: 5px; /* Add space below groupbox */
-            margin-left: 5px; /* Add space to the left */
-            margin-right: 5px; /* Add space to the right */
-            padding: 15px 8px 8px 8px; /* Adjust padding top for title */
+            border: 2px solid {border_color};
+            border-radius: 8px;
+            margin-top: 1em;
+            margin-bottom: 5px;
+            margin-left: 5px;
+            margin-right: 5px;
+            padding: 15px 8px 8px 8px;
         }}
         QGroupBox::title {{
             subcontrol-origin: margin;
-            subcontrol-position: top left; /* Position title */
+            subcontrol-position: top left;
             left: 10px;
             padding: 0 5px 0 5px;
             color: {secondary.name()};
-            /* Background behind title to cover the border */
             background-color: {background.name()};
         }}
         QPushButton {{
-            border: 2px solid {border_color}; /* Increased border width */
-            border-radius: 8px; /* Increased rounding */
+            border: 2px solid {border_color};
+            border-radius: 8px;
             padding: 8px 10px;
             background-color: {button_bg.name()};
             min-width: 80px;
         }}
         QPushButton:hover {{
             background-color: {button_hover_bg.name()};
-            border: 2px solid {border_hover_color}; /* Use hover border color */
+            border: 2px solid {border_hover_color};
         }}
         QPushButton:pressed {{
             background-color: {button_pressed_bg.name()};
@@ -617,46 +661,45 @@ def set_dark_theme(app):
         }}
         QTextEdit {{
             background-color: {background_base.name()};
-            border: 2px solid {border_color}; /* Increased border width */
-            border-radius: 8px; /* Added rounding */
+            border: 2px solid {border_color};
+            border-radius: 8px;
             color: {foreground.name()};
-            padding: 4px; /* Add some internal padding */
+            padding: 4px;
         }}
         QLabel {{
             border: none;
             padding: 2px;
         }}
-        ImageLabel {{ /* Keep specific border for the image */
-             border: 2px solid {border_color}; /* Increased border width */
-             border-radius: 8px; /* Added rounding */
+        ImageLabel {{
+             border: 2px solid {border_color};
+             border-radius: 8px;
         }}
         QVideoWidget {{
             background-color: {background_base.name()};
-            border: 2px solid {border_color}; /* Add border */
-            border-radius: 8px; /* Add rounding */
+            border: 2px solid {border_color};
+            border-radius: 8px;
         }}
-        /* Style scrollbars */
         QScrollBar:vertical {{
             border: 1px solid {border_color};
             background: {background.name()};
-            width: 18px; /* Slightly wider */
-            margin: 18px 0 18px 0; /* Adjust margin for thicker buttons */
+            width: 18px;
+            margin: 18px 0 18px 0;
             border-radius: 9px;
         }}
         QScrollBar::handle:vertical {{
             background: {disabled.name()};
             min-height: 25px;
-            border-radius: 8px; /* Rounded handle */
-            margin: 1px; /* Add slight margin around handle */
+            border-radius: 8px;
+            margin: 1px;
         }}
          QScrollBar::handle:vertical:hover {{
             background: {disabled.lighter(120).name()};
         }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-            border: 2px solid {border_color}; /* Match button border */
+            border: 2px solid {border_color};
             background: {button_bg.name()};
-            height: 16px; /* Adjust height */
-            border-radius: 8px; /* Match button rounding */
+            height: 16px;
+            border-radius: 8px;
             subcontrol-position: top;
             subcontrol-origin: margin;
         }}
@@ -665,11 +708,11 @@ def set_dark_theme(app):
          }}
         QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {{
              border: none;
-             width: 6px; /* Adjust size */
-             height: 6px; /* Adjust size */
+             width: 6px;
+             height: 6px;
              background: {foreground.name()};
-             border-radius: 3px; /* Make arrows round */
-             margin: 2px; /* Center arrows */
+             border-radius: 3px;
+             margin: 2px;
         }}
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
              background: none;
@@ -680,12 +723,10 @@ def set_dark_theme(app):
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 
-    # --- Set Global Font ---
     default_font = QtGui.QFont()
-    default_font.setPointSize(11) # Increase point size (adjust as needed)
-    default_font.setBold(True)    # Make it bold
+    default_font.setPointSize(11)
+    default_font.setBold(True)
     app.setFont(default_font)
-    # --- End Set Global Font ---
 
     set_dark_theme(app)
     main_window = MainWindow()
