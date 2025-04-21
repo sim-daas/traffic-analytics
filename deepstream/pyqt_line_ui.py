@@ -12,83 +12,125 @@ PYTHON_EXECUTABLE = sys.executable
 OUTPUT_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "videos")
 OUTPUT_VIDEO_PATH = os.path.join(OUTPUT_VIDEO_DIR, "output.mp4")
 
+# Theme colors (for preview drawing)
+COLOR_LINE_PREVIEW = QtGui.QColor("#81a1c1") # Primary blue
+COLOR_ROI_PREVIEW = QtGui.QColor("#88c0d0") # Secondary cyan
+PREVIEW_LINE_THICKNESS = 2
+
 class ImageLabel(QtWidgets.QLabel):
-    """ Custom QLabel to handle mouse events for drawing lines (PyQt6) """
+    """ Custom QLabel to handle mouse events for drawing lines and ROIs """
     line_drawn = QtCore.pyqtSignal(int, int, int, int) # x1, y, x2, y
+    roi_drawn = QtCore.pyqtSignal(int, int, int, int) # x1, y1, x2, y2
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.start_point = None
         self.end_point = None
         self.current_line_coords = None # Store the final line
-        self.original_pixmap = None # Store the clean pixmap without temporary lines
+        self.current_roi_coords = None # Store the final ROI
+        self.original_pixmap = None
         self.drawing = False
+        self.draw_mode = 'line' # Default mode: 'line' or 'roi'
 
     def setPixmap(self, pixmap: QtGui.QPixmap | None):
         self.original_pixmap = pixmap.copy() if pixmap else None
         super().setPixmap(pixmap)
 
+    def set_draw_mode(self, mode):
+        if mode in ['line', 'roi']:
+            self.draw_mode = mode
+            self.drawing = False # Stop any current drawing on mode change
+            self.start_point = None
+            self.end_point = None
+            self.update() # Redraw to clear temporary shapes
+
     def mousePressEvent(self, event: QtGui.QMouseEvent):
         if self.original_pixmap and event.button() == QtCore.Qt.MouseButton.LeftButton:
             self.start_point = event.pos()
-            self.end_point = event.pos() # Initialize end point
+            self.end_point = event.pos()
             self.drawing = True
-            # Clear previous final line visually for redraw
-            self.current_line_coords = None
-            self.update() # Trigger paintEvent
+            # Clear previous shape of the current mode visually for redraw
+            if self.draw_mode == 'line':
+                self.current_line_coords = None
+            else: # roi mode
+                self.current_roi_coords = None
+            self.update()
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent):
         if self.original_pixmap and self.drawing:
             self.end_point = event.pos()
-            self.update() # Trigger paintEvent to draw temporary line
+            self.update()
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent):
         if self.original_pixmap and self.drawing and event.button() == QtCore.Qt.MouseButton.LeftButton:
             self.drawing = False
             self.end_point = event.pos()
 
-            # Ensure line is horizontal (use start_point's y)
-            y = self.start_point.y()
-            x1 = min(self.start_point.x(), self.end_point.x())
-            x2 = max(self.start_point.x(), self.end_point.x())
-
-            # Clamp coordinates to pixmap bounds
             pixmap_width = self.original_pixmap.width() if self.original_pixmap else 0
             pixmap_height = self.original_pixmap.height() if self.original_pixmap else 0
-            x1 = max(0, min(x1, pixmap_width - 1))
-            y = max(0, min(y, pixmap_height - 1))
-            x2 = max(x1, min(x2, pixmap_width - 1)) # Ensure x2 >= x1
 
-            self.current_line_coords = (x1, y, x2, y)
-            self.line_drawn.emit(*self.current_line_coords)
-            self.update() # Trigger paintEvent to draw final line
+            # Clamp start and end points
+            sx = max(0, min(self.start_point.x(), pixmap_width - 1))
+            sy = max(0, min(self.start_point.y(), pixmap_height - 1))
+            ex = max(0, min(self.end_point.x(), pixmap_width - 1))
+            ey = max(0, min(self.end_point.y(), pixmap_height - 1))
+
+            if self.draw_mode == 'line':
+                # Ensure line is horizontal (use start_point's y)
+                y = sy
+                x1 = min(sx, ex)
+                x2 = max(sx, ex)
+                self.current_line_coords = (x1, y, x2, y)
+                self.line_drawn.emit(*self.current_line_coords)
+            else: # roi mode
+                x1 = min(sx, ex)
+                y1 = min(sy, ey)
+                x2 = max(sx, ex)
+                y2 = max(sy, ey)
+                # Ensure ROI has non-zero width and height
+                if x1 < x2 and y1 < y2:
+                    self.current_roi_coords = (x1, y1, x2, y2)
+                    self.roi_drawn.emit(*self.current_roi_coords)
+                else:
+                    self.current_roi_coords = None # Discard zero-size ROI
+
+            self.update()
 
     def paintEvent(self, event: QtGui.QPaintEvent):
         if not self.original_pixmap:
             super().paintEvent(event)
             return
 
-        # Draw the original pixmap first
         painter = QtGui.QPainter(self)
         painter.drawPixmap(self.rect(), self.original_pixmap)
 
-        # Draw the current line (temporary during drag or final after release)
-        line_to_draw = None
-        if self.drawing and self.start_point and self.end_point:
-            # Draw temporary horizontal line during drag
-            y = self.start_point.y()
-            x1 = min(self.start_point.x(), self.end_point.x())
-            x2 = max(self.start_point.x(), self.end_point.x())
-            line_to_draw = (x1, y, x2, y)
-            pen = QtGui.QPen(QtCore.Qt.GlobalColor.blue, 3, QtCore.Qt.PenStyle.DotLine) # Dotted blue line while drawing
-        elif self.current_line_coords:
-            # Draw final solid line after release
-            line_to_draw = self.current_line_coords
-            pen = QtGui.QPen(QtCore.Qt.GlobalColor.red, 3, QtCore.Qt.PenStyle.SolidLine) # Solid red line when finished
-
-        if line_to_draw:
+        # Draw final shapes first (if they exist)
+        if self.current_line_coords:
+            pen = QtGui.QPen(COLOR_LINE_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.SolidLine)
             painter.setPen(pen)
-            painter.drawLine(line_to_draw[0], line_to_draw[1], line_to_draw[2], line_to_draw[3])
+            painter.drawLine(*self.current_line_coords)
+        if self.current_roi_coords:
+            pen = QtGui.QPen(COLOR_ROI_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.drawRect(QtCore.QRectF(QtCore.QPointF(self.current_roi_coords[0], self.current_roi_coords[1]),
+                                           QtCore.QPointF(self.current_roi_coords[2], self.current_roi_coords[3])))
+
+        # Draw temporary shape during drag
+        if self.drawing and self.start_point and self.end_point:
+            if self.draw_mode == 'line':
+                pen = QtGui.QPen(COLOR_LINE_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.DotLine)
+                painter.setPen(pen)
+                y = self.start_point.y()
+                x1 = min(self.start_point.x(), self.end_point.x())
+                x2 = max(self.start_point.x(), self.end_point.x())
+                painter.drawLine(x1, y, x2, y)
+            else: # roi mode
+                pen = QtGui.QPen(COLOR_ROI_PREVIEW, PREVIEW_LINE_THICKNESS, QtCore.Qt.PenStyle.DotLine)
+                painter.setPen(pen)
+                # Convert QPoint to QPointF for QRectF constructor
+                start_point_f = QtCore.QPointF(self.start_point)
+                end_point_f = QtCore.QPointF(self.end_point)
+                painter.drawRect(QtCore.QRectF(start_point_f, end_point_f).normalized())
 
         painter.end()
 
@@ -140,6 +182,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale_x_display = 1.0
         self.scale_y_display = 1.0
         self.line_coords_original = None # Line coordinates relative to original frame
+        self.roi_coords_original = None # Store drawn ROI coords
         self.output_video_path = None # Store path for video player
         self.processing_thread = None # To hold the worker thread
 
@@ -180,10 +223,27 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Row 2: Controls and Logs ---
         self.controls_group = QtWidgets.QGroupBox("Controls")
         self.controls_layout = QtWidgets.QVBoxLayout()
+
+        # --- Drawing Mode Selection ---
+        self.draw_mode_group = QtWidgets.QGroupBox("Draw Mode")
+        self.draw_mode_layout = QtWidgets.QHBoxLayout()
+        self.radio_draw_line = QtWidgets.QRadioButton("Line")
+        self.radio_draw_roi = QtWidgets.QRadioButton("ROI")
+        self.radio_draw_line.setChecked(True) # Default to line
+        self.draw_mode_layout.addWidget(self.radio_draw_line)
+        self.draw_mode_layout.addWidget(self.radio_draw_roi)
+        self.draw_mode_group.setLayout(self.draw_mode_layout)
+        # --- End Drawing Mode Selection ---
+
         self.lbl_line_coords = QtWidgets.QLabel("Line Coords (Original): None")
+        self.lbl_roi_coords = QtWidgets.QLabel("ROI Coords (Original): None") # Label to display ROI
+
         self.btn_process = QtWidgets.QPushButton("Process Video")
-        self.btn_process.setEnabled(False)
+        self.btn_process.setEnabled(False) # Disabled until line is drawn
+
+        self.controls_layout.addWidget(self.draw_mode_group) # Add draw mode selection
         self.controls_layout.addWidget(self.lbl_line_coords)
+        self.controls_layout.addWidget(self.lbl_roi_coords) # Add ROI display label
         self.controls_layout.addWidget(self.btn_process)
         self.controls_layout.addStretch()
         self.controls_group.setLayout(self.controls_layout)
@@ -217,7 +277,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Connections ---
         self.btn_select_video.clicked.connect(self.select_video)
         self.image_label.line_drawn.connect(self.update_line_coords)
+        self.image_label.roi_drawn.connect(self.update_roi_coords) # Connect ROI signal
         self.btn_process.clicked.connect(self.process_video)
+        # Drawing mode connections
+        self.radio_draw_line.toggled.connect(lambda: self.image_label.set_draw_mode('line'))
+        self.radio_draw_roi.toggled.connect(lambda: self.image_label.set_draw_mode('roi'))
         # Video controls
         self.btn_play.clicked.connect(self.media_player.play)
         self.btn_pause.clicked.connect(self.media_player.pause)
@@ -238,7 +302,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.lbl_video_path.setText(os.path.basename(file_path))
             self.log_output.clear()
             self.line_coords_original = None
+            self.roi_coords_original = None # Reset ROI on new video
             self.lbl_line_coords.setText("Line Coords (Original): None")
+            self.lbl_roi_coords.setText("ROI Coords (Original): None") # Reset ROI label
+            # Reset drawing shapes in ImageLabel
+            self.image_label.current_line_coords = None
+            self.image_label.current_roi_coords = None
+            self.radio_draw_line.setChecked(True) # Reset draw mode
             self.btn_process.setEnabled(False)
             self.load_first_frame()
             self.media_player.stop() # Stop previous video
@@ -306,15 +376,47 @@ class MainWindow(QtWidgets.QMainWindow):
             # Clamp to original dimensions
             x1_orig = max(0, min(x1_orig, self.original_width - 1))
             y_orig = max(0, min(y_orig, self.original_height - 1))
-            x2_orig = max(x1_orig, min(x2_orig, self.original_width - 1)) # Ensure x2 >= x1
+            x2_orig = max(x1_orig, min(x2_orig, self.original_width - 1))
 
-            self.line_coords_original = (x1_orig, y_orig, x2_orig, y_orig) # Store as x1,y1,x2,y2
+            self.line_coords_original = (x1_orig, y_orig, x2_orig, y_orig)
             self.lbl_line_coords.setText(f"Line Coords (Original): {self.line_coords_original}")
-            self.btn_process.setEnabled(True)
+            self.btn_process.setEnabled(True) # Enable processing once line is drawn
         else:
-            self.show_error("Cannot calculate original coordinates (invalid scale).")
+            self.show_error("Cannot calculate original line coordinates (invalid scale).")
             self.line_coords_original = None
             self.btn_process.setEnabled(False)
+
+    def update_roi_coords(self, x1_disp, y1_disp, x2_disp, y2_disp):
+        """Slot to receive ROI coordinates from ImageLabel."""
+        if self.scale_x_display > 0 and self.scale_y_display > 0:
+            x1_orig = int(x1_disp / self.scale_x_display)
+            y1_orig = int(y1_disp / self.scale_y_display)
+            x2_orig = int(x2_disp / self.scale_x_display)
+            y2_orig = int(y2_disp / self.scale_y_display)
+
+            # Clamp to original dimensions
+            x1_orig = max(0, min(x1_orig, self.original_width - 1))
+            y1_orig = max(0, min(y1_orig, self.original_height - 1))
+            x2_orig = max(x1_orig, min(x2_orig, self.original_width - 1))
+            y2_orig = max(y1_orig, min(y2_orig, self.original_height - 1))
+
+            # Ensure valid ROI after clamping
+            if x1_orig < x2_orig and y1_orig < y2_orig:
+                self.roi_coords_original = (x1_orig, y1_orig, x2_orig, y2_orig)
+                self.lbl_roi_coords.setText(f"ROI Coords (Original): {self.roi_coords_original}")
+            else:
+                 self.show_error("ROI became invalid after clamping to video dimensions.")
+                 self.roi_coords_original = None
+                 self.lbl_roi_coords.setText("ROI Coords (Original): Invalid")
+        else:
+            self.show_error("Cannot calculate original ROI coordinates (invalid scale).")
+            self.roi_coords_original = None
+            self.lbl_roi_coords.setText("ROI Coords (Original): Error")
+
+    def _validate_and_get_roi(self):
+        """Returns the drawn ROI coordinates if available, otherwise None."""
+        # Now primarily relies on the drawn ROI stored in self.roi_coords_original
+        return self.roi_coords_original
 
 
     def process_video(self):
@@ -325,6 +427,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error("Processing is already in progress.")
             return
 
+        # --- Get ROI coordinates (now from drawing) ---
+        current_roi = self._validate_and_get_roi()
+        # No need for "ERROR" check as validation happens during drawing/update
+        # --- End Get ROI ---
+
         # Ensure output directory exists
         try:
             os.makedirs(OUTPUT_VIDEO_DIR, exist_ok=True)
@@ -332,7 +439,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error(f"Failed to create output directory {OUTPUT_VIDEO_DIR}: {e}")
             return
 
-        self.output_video_path = OUTPUT_VIDEO_PATH # Use fixed path
+        self.output_video_path = OUTPUT_VIDEO_PATH
 
         cmd = [
             PYTHON_EXECUTABLE,
@@ -340,13 +447,24 @@ class MainWindow(QtWidgets.QMainWindow):
             "--pgie-config", PGIE_CONFIG_PATH,
             "--tracker-config", TRACKER_CONFIG_PATH,
             self.video_path,
-            self.output_video_path, # Use fixed output path
+            self.output_video_path,
             "--line",
-            str(self.line_coords_original[0]), # x1
-            str(self.line_coords_original[1]), # y1
-            str(self.line_coords_original[2]), # x2
-            str(self.line_coords_original[3])  # y2 (same as y1)
+            str(self.line_coords_original[0]),
+            str(self.line_coords_original[1]),
+            str(self.line_coords_original[2]),
+            str(self.line_coords_original[3])
         ]
+
+        # --- Add ROI arguments if available ---
+        if current_roi:
+            cmd.extend([
+                "--roi",
+                str(current_roi[0]), # xmin
+                str(current_roi[1]), # ymin
+                str(current_roi[2]), # xmax
+                str(current_roi[3])  # ymax
+            ])
+        # --- End Add ROI ---
 
         self.log_output.clear()
         self.log_output.append("Starting processing...")
