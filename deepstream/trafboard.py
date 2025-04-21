@@ -115,7 +115,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                 line_params.y1 = self.scaled_line_y # Use scaled
                 line_params.x2 = self.scaled_line_x2 # Use scaled
                 line_params.y2 = self.scaled_line_y # Horizontal line
-                line_params.line_width = 2
+                line_params.line_width = 0
                 line_params.line_color.set(1.0, 0.0, 0.0, 0.7) # Red, semi-transparent
 
                 pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_line)
@@ -127,10 +127,10 @@ class TrafboardPipeline(NodeFileSinkPipeline):
             text_params.display_text = f"Vehicles Crossed: {self.vehicles_crossed}"
             text_params.x_offset = 10
             text_params.y_offset = 10
-            text_params.font_params.font_name = "Sans"
-            text_params.font_params.font_size = 12
+            text_params.font_params.font_name = "Sans Bold"
+            text_params.font_params.font_size = 22
             text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
-            text_params.set_bg_clr = 1
+            text_params.set_bg_clr = 5
             text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6)
             pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_text)
 
@@ -171,7 +171,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                             line_params_trail = display_meta_trail.line_params[0]
                             line_params_trail.x1, line_params_trail.y1 = start_point[0], start_point[1]
                             line_params_trail.x2, line_params_trail.y2 = end_point[0], end_point[1]
-                            line_params_trail.line_width = 2
+                            line_params_trail.line_width = 5
                             line_params_trail.line_color.set(color[0], color[1], color[2], color[3])
                             pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_trail)
 
@@ -191,6 +191,10 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                                     self.vehicles_crossed += 1
                                     self.object_crossed_line[object_id] = True
                                     self.get_logger().info(f"Object ID {object_id} crossed the line. Count: {self.vehicles_crossed}")
+                                    
+                    rect_params.border_width = 3
+                    rect_params.border_color.set(1.0, 1.0, 0.0, 1.0)
+
 
                 except StopIteration:
                     break

@@ -2,3 +2,4 @@ deepstream/DeepStream-Yolo
 deepstream/videos
 deepstream/__pycache__
 deepstream/sample_720p.h264
+backgrounds/

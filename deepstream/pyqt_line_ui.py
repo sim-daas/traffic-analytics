@@ -80,11 +80,11 @@ class ImageLabel(QtWidgets.QLabel):
             x1 = min(self.start_point.x(), self.end_point.x())
             x2 = max(self.start_point.x(), self.end_point.x())
             line_to_draw = (x1, y, x2, y)
-            pen = QtGui.QPen(QtCore.Qt.GlobalColor.blue, 2, QtCore.Qt.PenStyle.DotLine) # Dotted blue line while drawing
+            pen = QtGui.QPen(QtCore.Qt.GlobalColor.blue, 3, QtCore.Qt.PenStyle.DotLine) # Dotted blue line while drawing
         elif self.current_line_coords:
             # Draw final solid line after release
             line_to_draw = self.current_line_coords
-            pen = QtGui.QPen(QtCore.Qt.GlobalColor.red, 2, QtCore.Qt.PenStyle.SolidLine) # Solid red line when finished
+            pen = QtGui.QPen(QtCore.Qt.GlobalColor.red, 3, QtCore.Qt.PenStyle.SolidLine) # Solid red line when finished
 
         if line_to_draw:
             painter.setPen(pen)
@@ -129,7 +129,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PyQt6 Line Definition for DeepStream (Dark)")
-        self.setGeometry(100, 100, 1200, 800) # Adjusted size
+        self.setGeometry(100, 100, 1300, 800) # Adjusted size
 
         self.video_path = None
         self.original_frame = None
@@ -148,19 +148,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.layout = QtWidgets.QGridLayout(self.central_widget)
 
-        # Top row: File selection
+        # --- Row 0: File selection ---
         self.btn_select_video = QtWidgets.QPushButton("Select Video")
         self.lbl_video_path = QtWidgets.QLabel("No video selected")
         self.layout.addWidget(self.btn_select_video, 0, 0)
         self.layout.addWidget(self.lbl_video_path, 0, 1, 1, 2) # Span 2 columns
 
-        # Middle row: Image display and controls
+        # --- Row 1: Image display and Video Player ---
         self.image_label = ImageLabel()
         self.image_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("border: 1px solid gray;") # Adjusted border color
-        self.layout.addWidget(self.image_label, 1, 0, 2, 1) # Span 2 rows
+        self.image_label.setStyleSheet("border: 1px solid gray;")
+        self.layout.addWidget(self.image_label, 1, 0)
 
-        # Controls GroupBox
+        self.video_group = QtWidgets.QGroupBox("Output Video")
+        self.video_layout = QtWidgets.QVBoxLayout()
+        self.video_widget = QtMultimediaWidgets.QVideoWidget()
+        self.media_player = QtMultimedia.QMediaPlayer()
+        self.media_player.setVideoOutput(self.video_widget)
+        self.video_control_layout = QtWidgets.QHBoxLayout()
+        self.btn_play = QtWidgets.QPushButton("Play")
+        self.btn_pause = QtWidgets.QPushButton("Pause")
+        self.btn_stop = QtWidgets.QPushButton("Stop")
+        self.video_control_layout.addWidget(self.btn_play)
+        self.video_control_layout.addWidget(self.btn_pause)
+        self.video_control_layout.addWidget(self.btn_stop)
+        self.video_layout.addWidget(self.video_widget, 1)
+        self.video_layout.addLayout(self.video_control_layout)
+        self.video_group.setLayout(self.video_layout)
+        self.layout.addWidget(self.video_group, 1, 1, 1, 2)
+
+        # --- Row 2: Controls and Logs ---
         self.controls_group = QtWidgets.QGroupBox("Controls")
         self.controls_layout = QtWidgets.QVBoxLayout()
         self.lbl_line_coords = QtWidgets.QLabel("Line Coords (Original): None")
@@ -170,45 +187,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls_layout.addWidget(self.btn_process)
         self.controls_layout.addStretch()
         self.controls_group.setLayout(self.controls_layout)
-        self.layout.addWidget(self.controls_group, 1, 1) # Next to image
+        self.layout.addWidget(self.controls_group, 2, 0)
 
-        # Video Player GroupBox
-        self.video_group = QtWidgets.QGroupBox("Output Video")
-        self.video_layout = QtWidgets.QVBoxLayout()
-        self.video_widget = QtMultimediaWidgets.QVideoWidget()
-        self.media_player = QtMultimedia.QMediaPlayer()
-        self.media_player.setVideoOutput(self.video_widget)
-        # Add Play/Pause/Stop buttons
-        self.video_control_layout = QtWidgets.QHBoxLayout()
-        self.btn_play = QtWidgets.QPushButton("Play")
-        self.btn_pause = QtWidgets.QPushButton("Pause")
-        self.btn_stop = QtWidgets.QPushButton("Stop")
-        self.video_control_layout.addWidget(self.btn_play)
-        self.video_control_layout.addWidget(self.btn_pause)
-        self.video_control_layout.addWidget(self.btn_stop)
-        self.video_layout.addWidget(self.video_widget, 1) # Allow video to stretch
-        self.video_layout.addLayout(self.video_control_layout)
-        self.video_group.setLayout(self.video_layout)
-        self.layout.addWidget(self.video_group, 1, 2) # Right column
-
-        # Log Output GroupBox
         self.log_group = QtWidgets.QGroupBox("Logs")
         self.log_layout = QtWidgets.QVBoxLayout()
         self.log_output = QtWidgets.QTextEdit()
         self.log_output.setReadOnly(True)
+        # --- Set specific font for logs ---
+        log_font = QtGui.QFont()
+        log_font.setPointSize(10) # Slightly smaller than default if desired
+        log_font.setBold(False)   # Ensure it's not bold
+        self.log_output.setFont(log_font)
+        # --- End set specific font ---
         self.log_layout.addWidget(self.log_output)
         self.log_group.setLayout(self.log_layout)
-        self.layout.addWidget(self.log_group, 2, 1, 1, 2) # Bottom right, span 2 columns
+        self.layout.addWidget(self.log_group, 2, 1, 1, 2)
 
-        # Add a status label
+        # --- Row 3: Status Label ---
         self.lbl_status = QtWidgets.QLabel("")
-        self.layout.addWidget(self.lbl_status, 3, 0, 1, 3) # Bottom row, span all columns
+        self.layout.addWidget(self.lbl_status, 3, 0, 1, 3)
 
-        # Set column stretch factors
-        self.layout.setColumnStretch(0, 3) # Image column wider
-        self.layout.setColumnStretch(1, 1) # Controls column
-        self.layout.setColumnStretch(2, 2) # Video column
-        # Set row stretch factors
+        # --- Set column/row stretch factors ---
+        self.layout.setColumnStretch(0, 2) # Image/Controls column wider
+        self.layout.setColumnStretch(1, 1) # Video column start
+        self.layout.setColumnStretch(2, 1) # Video column end
         self.layout.setRowStretch(1, 3) # Middle row (image/video) taller
         self.layout.setRowStretch(2, 1) # Log row
 
@@ -406,77 +408,167 @@ class MainWindow(QtWidgets.QMainWindow):
 def set_dark_theme(app):
     app.setStyle("Fusion")
 
+    # Define colors from the provided palette
+    background = QtGui.QColor("#1f2229") # Use background-alt for main window
+    background_base = QtGui.QColor("#000000") # True black for base elements like text edit
+    foreground = QtGui.QColor("#dfdfdf")
+    primary = QtGui.QColor("#81a1c1")
+    secondary = QtGui.QColor("#88c0d0") # Use for borders?
+    alert = QtGui.QColor("#bf616a")
+    disabled = QtGui.QColor("#707880")
+    orange = QtGui.QColor("#FFA500") # Keep for potential future use
+
     dark_palette = QtGui.QPalette()
 
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor(53, 53, 53))
-    dark_palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtCore.Qt.GlobalColor.white)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Base, QtGui.QColor(35, 35, 35))
-    dark_palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, QtGui.QColor(53, 53, 53))
-    dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipBase, QtCore.Qt.GlobalColor.white)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipText, QtCore.Qt.GlobalColor.white)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Text, QtCore.Qt.GlobalColor.white)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor(53, 53, 53))
-    dark_palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtCore.Qt.GlobalColor.white)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.BrightText, QtCore.Qt.GlobalColor.red)
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(42, 130, 218))
+    # Base colors
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Window, background)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.WindowText, foreground)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Base, background_base) # Base for inputs
+    dark_palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, background) # Used in views like tables/lists
+    dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipBase, background)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.ToolTipText, foreground)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Text, foreground)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Button, background) # Button background controlled by stylesheet
+    dark_palette.setColor(QtGui.QPalette.ColorRole.ButtonText, foreground)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.BrightText, alert)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Link, primary)
 
-    dark_palette.setColor(QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(42, 130, 218))
-    dark_palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtCore.Qt.GlobalColor.black)
+    # Highlight colors
+    dark_palette.setColor(QtGui.QPalette.ColorRole.Highlight, primary)
+    dark_palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, background_base) # Black text on primary highlight
 
-    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, QtGui.QColor(127, 127, 127))
-    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(127, 127, 127))
-    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, QtGui.QColor(127, 127, 127))
-    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(80, 80, 80))
-    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor(127, 127, 127))
+    # Disabled colors
+    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, disabled)
+    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, disabled)
+    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, disabled)
+    # Slightly darker highlight for disabled items
+    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, background.darker(120))
+    dark_palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, disabled)
 
     app.setPalette(dark_palette)
 
-    app.setStyleSheet("""
-        QWidget {
-            color: white;
-            background-color: rgb(53, 53, 53);
-        }
-        QGroupBox {
-            border: 1px solid gray;
-            border-radius: 5px;
-            margin-top: 0.5em;
-        }
-        QGroupBox::title {
+    # Define some derived colors for the stylesheet
+    button_bg = background.lighter(115) # Slightly lighter than main background
+    button_hover_bg = background.lighter(130)
+    button_pressed_bg = background.lighter(105)
+    button_disabled_bg = background.darker(110)
+    border_color = secondary.darker(120).name() # Use a darker secondary for borders
+    border_hover_color = secondary.name() # Lighter border on hover
+
+    app.setStyleSheet(f"""
+        QWidget {{
+            color: {foreground.name()};
+            background-color: {background.name()};
+        }}
+        QGroupBox {{
+            border: 2px solid {border_color}; /* Increased border width */
+            border-radius: 8px; /* Increased rounding */
+            margin-top: 1em; /* Add space above groupbox title */
+            margin-bottom: 5px; /* Add space below groupbox */
+            margin-left: 5px; /* Add space to the left */
+            margin-right: 5px; /* Add space to the right */
+            padding: 15px 8px 8px 8px; /* Adjust padding top for title */
+        }}
+        QGroupBox::title {{
             subcontrol-origin: margin;
+            subcontrol-position: top left; /* Position title */
             left: 10px;
-            padding: 0 3px 0 3px;
-        }
-        QPushButton {
-            border: 1px solid gray;
-            border-radius: 4px;
-            padding: 5px;
-            background-color: rgb(70, 70, 70);
-        }
-        QPushButton:hover {
-            background-color: rgb(85, 85, 85);
-        }
-        QPushButton:pressed {
-            background-color: rgb(60, 60, 60);
-        }
-        QPushButton:disabled {
-            background-color: rgb(45, 45, 45);
-            color: gray;
-        }
-        QTextEdit {
-            background-color: rgb(35, 35, 35);
-            border: 1px solid gray;
-        }
-        QLabel {
+            padding: 0 5px 0 5px;
+            color: {secondary.name()};
+            /* Background behind title to cover the border */
+            background-color: {background.name()};
+        }}
+        QPushButton {{
+            border: 2px solid {border_color}; /* Increased border width */
+            border-radius: 8px; /* Increased rounding */
+            padding: 8px 10px;
+            background-color: {button_bg.name()};
+            min-width: 80px;
+        }}
+        QPushButton:hover {{
+            background-color: {button_hover_bg.name()};
+            border: 2px solid {border_hover_color}; /* Use hover border color */
+        }}
+        QPushButton:pressed {{
+            background-color: {button_pressed_bg.name()};
+        }}
+        QPushButton:disabled {{
+            background-color: {button_disabled_bg.name()};
+            color: {disabled.name()};
+            border: 2px solid {disabled.darker(110).name()};
+        }}
+        QTextEdit {{
+            background-color: {background_base.name()};
+            border: 2px solid {border_color}; /* Increased border width */
+            border-radius: 8px; /* Added rounding */
+            color: {foreground.name()};
+            padding: 4px; /* Add some internal padding */
+        }}
+        QLabel {{
             border: none;
-        }
-        QVideoWidget {
-            background-color: black;
-        }
+            padding: 2px;
+        }}
+        ImageLabel {{ /* Keep specific border for the image */
+             border: 2px solid {border_color}; /* Increased border width */
+             border-radius: 8px; /* Added rounding */
+        }}
+        QVideoWidget {{
+            background-color: {background_base.name()};
+            border: 2px solid {border_color}; /* Add border */
+            border-radius: 8px; /* Add rounding */
+        }}
+        /* Style scrollbars */
+        QScrollBar:vertical {{
+            border: 1px solid {border_color};
+            background: {background.name()};
+            width: 18px; /* Slightly wider */
+            margin: 18px 0 18px 0; /* Adjust margin for thicker buttons */
+            border-radius: 9px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {disabled.name()};
+            min-height: 25px;
+            border-radius: 8px; /* Rounded handle */
+            margin: 1px; /* Add slight margin around handle */
+        }}
+         QScrollBar::handle:vertical:hover {{
+            background: {disabled.lighter(120).name()};
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            border: 2px solid {border_color}; /* Match button border */
+            background: {button_bg.name()};
+            height: 16px; /* Adjust height */
+            border-radius: 8px; /* Match button rounding */
+            subcontrol-position: top;
+            subcontrol-origin: margin;
+        }}
+         QScrollBar::add-line:vertical {{
+            subcontrol-position: bottom;
+         }}
+        QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {{
+             border: none;
+             width: 6px; /* Adjust size */
+             height: 6px; /* Adjust size */
+             background: {foreground.name()};
+             border-radius: 3px; /* Make arrows round */
+             margin: 2px; /* Center arrows */
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+             background: none;
+        }}
     """)
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+
+    # --- Set Global Font ---
+    default_font = QtGui.QFont()
+    default_font.setPointSize(11) # Increase point size (adjust as needed)
+    default_font.setBold(True)    # Make it bold
+    app.setFont(default_font)
+    # --- End Set Global Font ---
+
     set_dark_theme(app)
     main_window = MainWindow()
     main_window.show()
