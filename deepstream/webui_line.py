@@ -9,57 +9,67 @@ from PIL import Image
 
 st.set_page_config(layout="wide")
 
-st.title("DeepStream Video Processing with ROI")
-st.write("Upload a video, select a Region of Interest (ROI) in a separate window, and process it.")
-st.write("The pipeline will count vehicles crossing the middle vertical line of the ROI.")
+st.title("DeepStream Video Processing with Line Crossing")
+st.write("Upload a video, define a horizontal line using sliders, and process it.")
+st.write("The pipeline will count vehicles crossing the defined line segment.")
 
+# --- Configuration ---
 TRAFBOARD_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "trafboard.py")
 PGIE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config_inferyolov8.txt")
 TRACKER_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config_tracker.txt")
 PYTHON_EXECUTABLE = sys.executable
 
-if 'roi_coords' not in st.session_state:
-    st.session_state.roi_coords = None
-if 'first_frame' not in st.session_state:
-    st.session_state.first_frame = None
-if 'uploaded_file_name' not in st.session_state:
-    st.session_state.uploaded_file_name = None
-if 'temp_input_path' not in st.session_state:
-    st.session_state.temp_input_path = None
-if 'processing_done' not in st.session_state:
-    st.session_state.processing_done = False
-if 'log_output' not in st.session_state:
-    st.session_state.log_output = ""
-if 'error_output' not in st.session_state:
-    st.session_state.error_output = ""
-if 'output_video_bytes' not in st.session_state:
-    st.session_state.output_video_bytes = None
-if 'output_file_basename' not in st.session_state:
-    st.session_state.output_file_basename = None
+# --- Session State ---
+if 'line_coords' not in st.session_state: st.session_state.line_coords = None # (x1, y, x2, y)
+if 'first_frame' not in st.session_state: st.session_state.first_frame = None
+if 'frame_height' not in st.session_state: st.session_state.frame_height = 0
+if 'frame_width' not in st.session_state: st.session_state.frame_width = 0
+if 'uploaded_file_name' not in st.session_state: st.session_state.uploaded_file_name = None
+if 'temp_input_path' not in st.session_state: st.session_state.temp_input_path = None
+if 'processing_done' not in st.session_state: st.session_state.processing_done = False
+if 'log_output' not in st.session_state: st.session_state.log_output = ""
+if 'error_output' not in st.session_state: st.session_state.error_output = ""
+if 'output_video_bytes' not in st.session_state: st.session_state.output_video_bytes = None
+if 'output_file_basename' not in st.session_state: st.session_state.output_file_basename = None
+# Slider states
+if 'line_y_pos' not in st.session_state: st.session_state.line_y_pos = 0
+if 'line_x1_pos' not in st.session_state: st.session_state.line_x1_pos = 0
+if 'line_x2_pos' not in st.session_state: st.session_state.line_x2_pos = 100 # Default end
 
+# --- Function to get first frame ---
 def get_first_frame(video_path):
     try:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             st.error("Error opening video file.")
-            return None
+            return None, 0, 0
+        st.session_state.frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        st.session_state.frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         ret, frame = cap.read()
         cap.release()
         if ret:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            return frame_rgb
+            # Initialize slider defaults based on frame size if not already set by user interaction
+            if st.session_state.line_y_pos == 0:
+                st.session_state.line_y_pos = st.session_state.frame_height // 2
+            if st.session_state.line_x1_pos == 0 and st.session_state.line_x2_pos == 100:
+                 st.session_state.line_x1_pos = st.session_state.frame_width // 4
+                 st.session_state.line_x2_pos = st.session_state.frame_width * 3 // 4
+
+            return frame_rgb, st.session_state.frame_height, st.session_state.frame_width
         else:
             st.error("Could not read the first frame.")
-            return None
+            return None, 0, 0
     except Exception as e:
         st.error(f"Error reading video with OpenCV: {e}")
-        return None
+        return None, 0, 0
 
+# --- File Uploader ---
 uploaded_file = st.file_uploader("Choose a video file (MP4 recommended)", type=["mp4", "mov", "avi", "mkv", "h264"])
 
 if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded_file_name:
     st.session_state.uploaded_file_name = uploaded_file.name
-    st.session_state.roi_coords = None
+    st.session_state.line_coords = None
     st.session_state.first_frame = None
     st.session_state.temp_input_path = None
     st.session_state.processing_done = False
@@ -67,6 +77,12 @@ if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded
     st.session_state.error_output = ""
     st.session_state.output_video_bytes = None
     st.session_state.output_file_basename = None
+    st.session_state.frame_height = 0
+    st.session_state.frame_width = 0
+    # Reset slider positions for new video
+    st.session_state.line_y_pos = 0
+    st.session_state.line_x1_pos = 0
+    st.session_state.line_x2_pos = 100
 
     st.write("File Uploaded:", uploaded_file.name)
 
@@ -74,65 +90,61 @@ if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded
         temp_input_file.write(uploaded_file.getvalue())
         st.session_state.temp_input_path = temp_input_file.name
 
-    st.session_state.first_frame = get_first_frame(st.session_state.temp_input_path)
+    st.session_state.first_frame, st.session_state.frame_height, st.session_state.frame_width = get_first_frame(st.session_state.temp_input_path)
     if st.session_state.first_frame is None:
         if os.path.exists(st.session_state.temp_input_path):
             os.remove(st.session_state.temp_input_path)
         st.session_state.temp_input_path = None
         st.session_state.uploaded_file_name = None
 
+# --- Line Definition ---
 if st.session_state.first_frame is not None:
-    st.subheader("Select Region of Interest (ROI)")
+    st.subheader("Define Crossing Line")
 
     col1, col2 = st.columns([2, 1])
 
-    with col1:
-        st.write("First Frame:")
-        st.image(st.session_state.first_frame, caption="First frame of the video", use_container_width=True)
-
     with col2:
-        st.write("Click the button below to open a window where you can draw the ROI.")
-        if st.button("Select ROI using OpenCV Window"):
-            st.info("Button clicked. Attempting to open OpenCV window...")
-            try:
-                st.info("Opening OpenCV window... Please select ROI and press ENTER or SPACE. Press C to cancel.")
-                frame_bgr = cv2.cvtColor(st.session_state.first_frame, cv2.COLOR_RGB2BGR)
-                roi = cv2.selectROI("Select ROI", frame_bgr, fromCenter=False, showCrosshair=True)
-                cv2.destroyWindow("Select ROI")
+        st.write("Adjust Line Position and Extents:")
+        st.session_state.line_y_pos = st.slider(
+            "Line Y Position", 0, st.session_state.frame_height - 1, st.session_state.line_y_pos
+        )
+        # Use columns for x sliders to place them side-by-side
+        x_col1, x_col2 = st.columns(2)
+        with x_col1:
+            st.session_state.line_x1_pos = st.slider(
+                "Line Start X (x1)", 0, st.session_state.frame_width - 1, st.session_state.line_x1_pos
+            )
+        with x_col2:
+            # Ensure x2 is always >= x1
+            min_x2 = st.session_state.line_x1_pos
+            st.session_state.line_x2_pos = st.slider(
+                "Line End X (x2)", min_x2, st.session_state.frame_width - 1, max(min_x2, st.session_state.line_x2_pos)
+            )
 
-                if roi != (0, 0, 0, 0):
-                    x, y, w, h = roi
-                    orig_frame_height, orig_frame_width, _ = st.session_state.first_frame.shape
-                    x = max(0, min(x, orig_frame_width - 1))
-                    y = max(0, min(y, orig_frame_height - 1))
-                    w = max(1, min(w, orig_frame_width - x))
-                    h = max(1, min(h, orig_frame_height - y))
-                    st.session_state.roi_coords = (x, y, w, h)
-                    st.success(f"ROI selected: {st.session_state.roi_coords}")
-                    st.rerun()
-                else:
-                    st.warning("ROI selection cancelled or invalid.")
-                    st.session_state.roi_coords = None
+        # Update line coordinates in session state
+        st.session_state.line_coords = (
+            st.session_state.line_x1_pos,
+            st.session_state.line_y_pos,
+            st.session_state.line_x2_pos,
+            st.session_state.line_y_pos # y1 and y2 are the same for horizontal line
+        )
+        st.write(f"Current Line: ({st.session_state.line_coords[0]}, {st.session_state.line_coords[1]}) to ({st.session_state.line_coords[2]}, {st.session_state.line_coords[3]})")
 
-            except Exception as e:
-                st.error(f"Error during ROI selection: {e}")
-                st.error("Ensure you have a graphical environment (DISPLAY) available for OpenCV.")
-                st.session_state.roi_coords = None
 
-        if st.session_state.roi_coords:
-            st.write(f"Current ROI: {st.session_state.roi_coords}")
-            frame_with_roi = st.session_state.first_frame.copy()
-            x, y, w, h = st.session_state.roi_coords
-            cv2.rectangle(frame_with_roi, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            mid_x = x + w // 2
-            cv2.line(frame_with_roi, (mid_x, y), (mid_x, y + h), (0, 0, 255), 1)
-            st.image(frame_with_roi, caption="Frame with selected ROI", use_container_width=True)
-        else:
-            st.write("No ROI selected yet.")
+    with col1:
+        st.write("First Frame with Line:")
+        frame_with_line = st.session_state.first_frame.copy()
+        if st.session_state.line_coords:
+            x1, y, x2, _ = st.session_state.line_coords
+            # Draw the line segment (Blue, thickness 2)
+            cv2.line(frame_with_line, (x1, y), (x2, y), (0, 0, 255), 2)
+        st.image(frame_with_line, caption="Frame with defined line", use_container_width=True)
 
+
+    # --- Processing ---
     if st.session_state.temp_input_path:
-        process_button_disabled = st.session_state.roi_coords is None
-        process_button = st.button("Process Video with Selected ROI", disabled=process_button_disabled)
+        process_button_disabled = st.session_state.line_coords is None
+        process_button = st.button("Process Video with Defined Line", disabled=process_button_disabled)
 
         if process_button:
             st.session_state.processing_done = False
@@ -141,8 +153,8 @@ if st.session_state.first_frame is not None:
             st.session_state.output_video_bytes = None
             st.session_state.output_file_basename = None
 
-            if st.session_state.roi_coords is None:
-                st.warning("Cannot process without a selected ROI.")
+            if st.session_state.line_coords is None:
+                st.warning("Cannot process without a defined line.")
             else:
                 temp_output_dir = tempfile.mkdtemp()
                 temp_output_path = os.path.join(temp_output_dir, "processed_" + os.path.splitext(st.session_state.uploaded_file_name)[0] + ".mp4")
@@ -155,11 +167,11 @@ if st.session_state.first_frame is not None:
                     "--tracker-config", TRACKER_CONFIG_PATH,
                     st.session_state.temp_input_path,
                     temp_output_path,
-                    "--roi",
-                    str(st.session_state.roi_coords[0]),
-                    str(st.session_state.roi_coords[1]),
-                    str(st.session_state.roi_coords[2]),
-                    str(st.session_state.roi_coords[3])
+                    "--line", # Use the new argument
+                    str(st.session_state.line_coords[0]),  # x1
+                    str(st.session_state.line_coords[1]),  # y1 (same as y2)
+                    str(st.session_state.line_coords[2]),  # x2
+                    str(st.session_state.line_coords[3])   # y2 (same as y1)
                 ]
                 st.info(f"Running command: {' '.join(cmd)}")
 
@@ -194,17 +206,11 @@ if st.session_state.first_frame is not None:
                     st.session_state.processing_done = True
                 finally:
                     if os.path.exists(temp_output_path):
-                        try:
-                            os.remove(temp_output_path)
-                            st.write(f"Cleaned up temporary output file: {temp_output_path}")
-                        except Exception as e:
-                            st.warning(f"Could not remove temporary output file {temp_output_path}: {e}")
+                        try: os.remove(temp_output_path)
+                        except Exception as e: st.warning(f"Could not remove temp output file: {e}")
                     if os.path.exists(temp_output_dir):
-                        try:
-                            os.rmdir(temp_output_dir)
-                            st.write(f"Cleaned up temporary output directory: {temp_output_dir}")
-                        except Exception as e:
-                            st.warning(f"Could not remove temporary directory {temp_output_dir}: {e}")
+                        try: os.rmdir(temp_output_dir)
+                        except Exception as e: st.warning(f"Could not remove temp output dir: {e}")
 
         if st.session_state.processing_done:
             if st.session_state.error_output:
@@ -223,23 +229,23 @@ if st.session_state.first_frame is not None:
                     mime="video/mp4"
                 )
             elif not st.session_state.error_output:
-                st.error("Processed output file not found, but no specific error was logged during processing.")
+                st.error("Processed output file not found, but no specific error was logged.")
 
 elif st.session_state.uploaded_file_name:
-    st.info(f"File '{st.session_state.uploaded_file_name}' is ready. Select ROI and click Process.")
+    st.info(f"File '{st.session_state.uploaded_file_name}' is ready. Define line and click Process.")
 else:
     st.info("Please upload a video file to begin.")
 
-if st.button("Clear Uploaded File and ROI"):
+# --- Clear Button ---
+if st.button("Clear Uploaded File and Line"):
     if st.session_state.temp_input_path and os.path.exists(st.session_state.temp_input_path):
-        try:
-            os.remove(st.session_state.temp_input_path)
-        except Exception as e:
-            st.warning(f"Could not remove temp file {st.session_state.temp_input_path}: {e}")
+        try: os.remove(st.session_state.temp_input_path)
+        except Exception as e: st.warning(f"Could not remove temp file: {e}")
 
     keys_to_delete = [
-        'roi_coords', 'first_frame', 'uploaded_file_name', 'temp_input_path',
-        'output_video_bytes', 'output_file_basename'
+        'line_coords', 'first_frame', 'uploaded_file_name', 'temp_input_path',
+        'output_video_bytes', 'output_file_basename', 'frame_height', 'frame_width',
+        'line_y_pos', 'line_x1_pos', 'line_x2_pos'
     ]
     for key in keys_to_delete:
         if key in st.session_state:
@@ -248,6 +254,10 @@ if st.button("Clear Uploaded File and ROI"):
     st.session_state.processing_done = False
     st.session_state.log_output = ""
     st.session_state.error_output = ""
+    # Re-initialize slider defaults
+    st.session_state.line_y_pos = 0
+    st.session_state.line_x1_pos = 0
+    st.session_state.line_x2_pos = 100
 
     try:
         st.cache_data.clear()
