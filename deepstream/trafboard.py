@@ -14,11 +14,10 @@ from deepstream_class import NodeFileSinkPipeline
 
 class TrafboardPipeline(NodeFileSinkPipeline):
     def __init__(self, pgie_config, input_file_path, tracker_config_path, output_file_path,
-                 line_coords, # Expecting a tuple (x1, y1, x2, y2) where y1==y2 based on ORIGINAL video resolution
+                 line_coords,
                  node_name='trafboard_line_sink_node'):
         super().__init__(pgie_config, input_file_path, tracker_config_path, output_file_path, node_name=node_name)
 
-        # --- Get Source Video Resolution ---
         try:
             cap = cv2.VideoCapture(input_file_path)
             if not cap.isOpened():
@@ -31,16 +30,16 @@ class TrafboardPipeline(NodeFileSinkPipeline):
             self.get_logger().info(f"Source video resolution: {self.source_width}x{self.source_height}")
         except Exception as e:
             self.get_logger().error(f"Failed to get source video resolution: {e}. Using pipeline defaults.")
-            # Fallback or assume pipeline resolution if source reading fails
-            self.source_width = self.streammux.get_property('width') # Get from parent class streammux
+           
+            self.source_width = self.streammux.get_property('width')
             self.source_height = self.streammux.get_property('height')
 
-        # --- Define Pipeline Resolution (from parent class streammux) ---
+      
         self.pipeline_width = self.streammux.get_property('width')
         self.pipeline_height = self.streammux.get_property('height')
         self.get_logger().info(f"Pipeline processing resolution: {self.pipeline_width}x{self.pipeline_height}")
 
-        # --- Calculate Scaling Factors ---
+      
         if self.source_width > 0 and self.source_height > 0:
             self.scale_x = self.pipeline_width / self.source_width
             self.scale_y = self.pipeline_height / self.source_height
@@ -51,26 +50,26 @@ class TrafboardPipeline(NodeFileSinkPipeline):
         self.get_logger().info(f"Scaling factors (pipeline/source): scale_x={self.scale_x:.4f}, scale_y={self.scale_y:.4f}")
 
 
-        # --- Line Crossing Setup (Using Scaled Coordinates) ---
+     
         self.line_enabled = False
         self.orig_line_x1, self.orig_line_y, self.orig_line_x2 = 0, -1, 0
         self.scaled_line_x1, self.scaled_line_y, self.scaled_line_x2 = 0, -1, 0
 
         if line_coords and len(line_coords) == 4 and line_coords[1] == line_coords[3]:
-            # Store original coordinates
+          
             self.orig_line_x1 = min(line_coords[0], line_coords[2])
             self.orig_line_y = line_coords[1]
             self.orig_line_x2 = max(line_coords[0], line_coords[2])
 
-            # Calculate and store scaled coordinates for pipeline use
+           
             self.scaled_line_x1 = int(self.orig_line_x1 * self.scale_x)
             self.scaled_line_y = int(self.orig_line_y * self.scale_y)
             self.scaled_line_x2 = int(self.orig_line_x2 * self.scale_x)
 
-            # Ensure scaled coordinates are within pipeline bounds
+           
             self.scaled_line_x1 = max(0, min(self.scaled_line_x1, self.pipeline_width - 1))
             self.scaled_line_y = max(0, min(self.scaled_line_y, self.pipeline_height - 1))
-            self.scaled_line_x2 = max(self.scaled_line_x1, min(self.scaled_line_x2, self.pipeline_width - 1)) # Ensure x2 >= x1
+            self.scaled_line_x2 = max(self.scaled_line_x1, min(self.scaled_line_x2, self.pipeline_width - 1)) 
 
             self.line_enabled = True
             self.get_logger().info(f"Original Line: ({self.orig_line_x1}, {self.orig_line_y}) to ({self.orig_line_x2}, {self.orig_line_y})")
@@ -106,7 +105,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
             except StopIteration:
                 break
 
-            # --- Draw Crossing Line (use SCALED coordinates) ---
+          
             if self.line_enabled:
                 display_meta_line = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
                 display_meta_line.num_lines = 1
@@ -121,7 +120,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
 
                 pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_line)
 
-            # --- Draw Crossing Count ---
+          
             display_meta_text = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
             display_meta_text.num_labels = 1
             text_params = display_meta_text.text_params[0]
@@ -147,7 +146,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                     width = int(rect_params.width)
                     height = int(rect_params.height)
 
-                    # Use bottom-center point for tracking and crossing
+                  
                     current_point_x = int(left + width / 2)
                     current_point_y = int(top + height / 2)
 
@@ -157,7 +156,7 @@ class TrafboardPipeline(NodeFileSinkPipeline):
 
                     trail_points = self.past_tracking_points[object_id]
 
-                    # --- Draw Trail ---
+                 
                     colors = [ (1.0, 1.0, 0.0, 1.0), (0.0, 1.0, 0.0, 1.0), (0.0, 0.0, 1.0, 1.0),
                                (1.0, 0.0, 1.0, 1.0), (0.0, 1.0, 1.0, 1.0), (1.0, 0.5, 0.0, 1.0) ]
                     color_index = object_id % len(colors)
@@ -176,18 +175,16 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                             line_params_trail.line_color.set(color[0], color[1], color[2], color[3])
                             pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta_trail)
 
-                    # --- Line Crossing Logic (use SCALED line coordinates) ---
+                  
                     if self.line_enabled and object_id not in self.object_crossed_line:
                         if len(trail_points) >= 2:
-                            prev_point_y = trail_points[-2][1] # Previous y-coordinate
+                            prev_point_y = trail_points[-2][1]
 
-                            # Check if the path crosses the horizontal line's y-coordinate
+                       
                             crossed_y = ((prev_point_y < self.scaled_line_y <= current_point_y) or \
                                          (current_point_y < self.scaled_line_y <= prev_point_y))
 
-                            # If it crossed the y-level, check if the x-coordinate is within the line segment
                             if crossed_y:
-                                # Simple check: use current x. More robust might interpolate x at crossing point.
                                 is_within_x_bounds = (self.scaled_line_x1 <= current_point_x <= self.scaled_line_x2)
 
                                 if is_within_x_bounds:
@@ -226,7 +223,6 @@ def main(args=None):
 
     line_coordinates = tuple(parsed_args.line) if parsed_args.line else None
 
-    # Validate line coordinates
     if line_coordinates and (len(line_coordinates) != 4 or line_coordinates[1] != line_coordinates[3]):
         print("Error: --line requires 4 coordinates (X1, Y1, X2, Y2) where Y1 must equal Y2 for a horizontal line.")
         sys.exit(1)
@@ -237,7 +233,7 @@ def main(args=None):
             input_file_path=parsed_args.input_video,
             tracker_config_path=parsed_args.tracker_config,
             output_file_path=parsed_args.output_video,
-            line_coords=line_coordinates # Pass original line coordinates
+            line_coords=line_coordinates
         )
         pipeline_node.get_logger().info(f"Trafboard Pipeline Node (Sink Mode) created for {parsed_args.input_video} -> {parsed_args.output_video}")
         pipeline_node.run()
