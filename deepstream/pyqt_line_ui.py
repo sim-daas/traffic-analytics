@@ -236,8 +236,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.video_group.setLayout(self.video_layout)
         self.layout.addWidget(self.video_group, 1, 1, 1, 2)
 
-        self.controls_group = QtWidgets.QGroupBox("Controls")
-        self.controls_layout = QtWidgets.QVBoxLayout()
+        self.controls_container = QtWidgets.QWidget()
+        self.controls_layout = QtWidgets.QVBoxLayout(self.controls_container)
 
         self.line_mgmt_group = QtWidgets.QGroupBox("Lines")
         self.line_mgmt_layout = QtWidgets.QVBoxLayout()
@@ -282,8 +282,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls_layout.addWidget(self.roi_mgmt_group)
         self.controls_layout.addWidget(self.btn_process)
         self.controls_layout.addStretch()
-        self.controls_group.setLayout(self.controls_layout)
-        self.layout.addWidget(self.controls_group, 2, 0)
+
+        self.controls_scroll_area = QtWidgets.QScrollArea()
+        self.controls_scroll_area.setWidgetResizable(True)
+        self.controls_scroll_area.setWidget(self.controls_container)
+        self.layout.addWidget(self.controls_scroll_area, 2, 0)
 
         self.log_group = QtWidgets.QGroupBox("Logs")
         self.log_layout = QtWidgets.QVBoxLayout()
@@ -303,8 +306,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layout.setColumnStretch(0, 2)
         self.layout.setColumnStretch(1, 1)
         self.layout.setColumnStretch(2, 1)
-        self.layout.setRowStretch(1, 3)
-        self.layout.setRowStretch(2, 1)
+        self.layout.setRowStretch(1, 4)
+        self.layout.setRowStretch(2, 2)
 
         self.btn_select_video.clicked.connect(self.select_video)
         self.image_label.line_drawn.connect(self.update_line_coords)
@@ -676,6 +679,10 @@ def set_dark_theme(app):
         }}
         QVideoWidget {{
             background-color: {background_base.name()};
+            border: 2px solid {border_color};
+            border-radius: 8px;
+        }}
+        QScrollArea {{
             border: 2px solid {border_color};
             border-radius: 8px;
         }}
