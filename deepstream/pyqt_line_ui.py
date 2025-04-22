@@ -2,8 +2,16 @@ import sys
 import os
 import subprocess
 import cv2
+import json
 from PyQt6 import QtWidgets, QtGui, QtCore, QtMultimedia, QtMultimediaWidgets
 import itertools  # For color cycling
+
+# Import matplotlib for statistics plots
+import matplotlib
+matplotlib.use('QtAgg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+import numpy as np
 
 # --- Configuration ---
 TRAFBOARD_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "trafboard.py")
@@ -12,6 +20,7 @@ TRACKER_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config_tracker.tx
 PYTHON_EXECUTABLE = sys.executable
 OUTPUT_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "videos")
 OUTPUT_VIDEO_PATH = os.path.join(OUTPUT_VIDEO_DIR, "output.mp4")
+STATS_DIR = os.path.join(os.path.dirname(__file__), "stats")
 
 # Theme colors (for preview drawing)
 PREVIEW_COLORS = itertools.cycle([
@@ -186,6 +195,292 @@ class ProcessWorker(QtCore.QThread):
             self.process_finished.emit(-1)
 
 
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super().__init__(self.fig)
+        self.setMinimumHeight(250)
+
+
+class StatsTab(QtWidgets.QWidget):
+    def __init__(self, parent=None, stats_dir=STATS_DIR):
+        super().__init__(parent)
+        self.stats_dir = stats_dir
+        self.stats_data = None
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.layout = QtWidgets.QVBoxLayout(self)
+
+        controls_layout = QtWidgets.QHBoxLayout()
+        self.stats_label = QtWidgets.QLabel("Select a statistics file:")
+        self.stats_combo = QtWidgets.QComboBox()
+        self.refresh_btn = QtWidgets.QPushButton("Refresh")
+        controls_layout.addWidget(self.stats_label)
+        controls_layout.addWidget(self.stats_combo, 1)
+        controls_layout.addWidget(self.refresh_btn)
+        self.layout.addLayout(controls_layout)
+
+        self.scroll_area = QtWidgets.QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        self.stats_container = QtWidgets.QWidget()
+        self.stats_layout = QtWidgets.QVBoxLayout(self.stats_container)
+
+        self.summary_group = QtWidgets.QGroupBox("Traffic Summary")
+        summary_layout = QtWidgets.QVBoxLayout()
+        self.summary_text = QtWidgets.QLabel("No statistics loaded. Process a video first.")
+        self.summary_text.setWordWrap(True)
+        summary_layout.addWidget(self.summary_text)
+        self.summary_group.setLayout(summary_layout)
+        self.stats_layout.addWidget(self.summary_group)
+
+        self.counts_group = QtWidgets.QGroupBox("Vehicles by Type and Direction")
+        counts_layout = QtWidgets.QVBoxLayout()
+        self.counts_table = QtWidgets.QTableWidget(0, 4)
+        self.counts_table.setHorizontalHeaderLabels(["Vehicle Type", "Inbound", "Outbound", "Total"])
+        counts_layout.addWidget(self.counts_table)
+        self.counts_group.setLayout(counts_layout)
+        self.stats_layout.addWidget(self.counts_group)
+
+        self.plots_group = QtWidgets.QGroupBox("Traffic Analytics")
+        plots_layout = QtWidgets.QGridLayout()
+
+        self.time_series_canvas = MplCanvas(self, width=5, height=3)
+        plots_layout.addWidget(self.time_series_canvas, 0, 0)
+
+        self.vehicle_types_canvas = MplCanvas(self, width=5, height=3)
+        plots_layout.addWidget(self.vehicle_types_canvas, 0, 1)
+
+        self.lane_occupancy_canvas = MplCanvas(self, width=5, height=3)
+        plots_layout.addWidget(self.lane_occupancy_canvas, 1, 0)
+
+        self.speed_canvas = MplCanvas(self, width=5, height=3)
+        plots_layout.addWidget(self.speed_canvas, 1, 1)
+
+        self.plots_group.setLayout(plots_layout)
+        self.stats_layout.addWidget(self.plots_group)
+
+        self.scroll_area.setWidget(self.stats_container)
+        self.layout.addWidget(self.scroll_area)
+
+        self.refresh_btn.clicked.connect(self.refresh_stats_files)
+        self.stats_combo.currentIndexChanged.connect(self.load_selected_stats)
+
+        os.makedirs(self.stats_dir, exist_ok=True)
+        self.refresh_stats_files()
+
+    def refresh_stats_files(self):
+        self.stats_combo.clear()
+
+        latest_path = os.path.join(self.stats_dir, "latest_stats.json")
+        if os.path.exists(latest_path):
+            self.stats_combo.addItem("Latest Statistics", latest_path)
+
+        stats_files = []
+        for file in os.listdir(self.stats_dir):
+            if file.endswith(".json") and file != "latest_stats.json":
+                filepath = os.path.join(self.stats_dir, file)
+                stats_files.append((file, filepath))
+
+        stats_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+
+        for display_name, filepath in stats_files:
+            self.stats_combo.addItem(display_name, filepath)
+
+        if self.stats_combo.count() > 0:
+            self.load_selected_stats(0)
+
+    def load_selected_stats(self, index):
+        if index < 0 or self.stats_combo.count() == 0:
+            return
+
+        filepath = self.stats_combo.itemData(index)
+        try:
+            with open(filepath, 'r') as file:
+                self.stats_data = json.load(file)
+            self.update_stats_display()
+        except Exception as e:
+            self.summary_text.setText(f"Error loading statistics file: {str(e)}")
+            self.stats_data = None
+
+    def update_stats_display(self):
+        if not self.stats_data:
+            return
+
+        duration = self.stats_data.get("duration", 0)
+        total_vehicles = 0
+        vehicle_types = set()
+
+        for line_id, counts in self.stats_data.get("line_counts", {}).items():
+            for vehicle_type, count in counts.get("total", {}).items():
+                total_vehicles += count
+                vehicle_types.add(vehicle_type)
+
+        summary_text = (
+            f"Duration: {duration:.1f} seconds\n"
+            f"Total vehicles detected: {total_vehicles}\n"
+            f"Vehicle types: {', '.join(sorted(vehicle_types))}\n"
+            f"Lines monitored: {len(self.stats_data.get('line_counts', {}))}"
+        )
+        self.summary_text.setText(summary_text)
+
+        self.update_counts_table()
+        self.create_time_series_chart()
+        self.create_vehicle_types_pie()
+        self.create_lane_occupancy_pie()
+        self.create_speed_bar_chart()
+
+    def update_counts_table(self):
+        if not self.stats_data:
+            return
+
+        inbound_counts = {}
+        outbound_counts = {}
+        total_counts = {}
+
+        for line_id, counts in self.stats_data.get("line_counts", {}).items():
+            for vehicle_type, count in counts.get("inbound", {}).items():
+                inbound_counts[vehicle_type] = inbound_counts.get(vehicle_type, 0) + count
+
+            for vehicle_type, count in counts.get("outbound", {}).items():
+                outbound_counts[vehicle_type] = outbound_counts.get(vehicle_type, 0) + count
+
+            for vehicle_type, count in counts.get("total", {}).items():
+                total_counts[vehicle_type] = total_counts.get(vehicle_type, 0) + count
+
+        all_types = sorted(set(list(inbound_counts.keys()) + list(outbound_counts.keys()) + list(total_counts.keys())))
+        self.counts_table.setRowCount(len(all_types))
+
+        for row, vehicle_type in enumerate(all_types):
+            type_item = QtWidgets.QTableWidgetItem(vehicle_type)
+            self.counts_table.setItem(row, 0, type_item)
+
+            inbound_item = QtWidgets.QTableWidgetItem(str(inbound_counts.get(vehicle_type, 0)))
+            self.counts_table.setItem(row, 1, inbound_item)
+
+            outbound_item = QtWidgets.QTableWidgetItem(str(outbound_counts.get(vehicle_type, 0)))
+            self.counts_table.setItem(row, 2, outbound_item)
+
+            total_item = QtWidgets.QTableWidgetItem(str(total_counts.get(vehicle_type, 0)))
+            self.counts_table.setItem(row, 3, total_item)
+
+        self.counts_table.resizeColumnsToContents()
+
+    def create_time_series_chart(self):
+        ax = self.time_series_canvas.axes
+        ax.clear()
+
+        time_series = self.stats_data.get("time_series", [])
+        if not time_series:
+            ax.set_title("No time series data available")
+            self.time_series_canvas.draw()
+            return
+
+        timestamps = []
+        total_counts = []
+
+        for entry in time_series:
+            timestamps.append(entry.get("timestamp", 0))
+
+            entry_count = 0
+            for line_id, line_data in entry.get("counts", {}).items():
+                for direction in ["inbound", "outbound"]:
+                    for vehicle_type, count in line_data.get(direction, {}).items():
+                        entry_count += count
+
+            total_counts.append(entry_count)
+
+        ax.plot(timestamps, total_counts, '-o', color='#81a1c1', linewidth=2)
+        ax.set_title("Vehicle Count Over Time")
+        ax.set_xlabel("Time (seconds)")
+        ax.set_ylabel("Total Vehicles")
+        ax.grid(True, alpha=0.3)
+
+        self.time_series_canvas.fig.tight_layout()
+        self.time_series_canvas.draw()
+
+    def create_vehicle_types_pie(self):
+        ax = self.vehicle_types_canvas.axes
+        ax.clear()
+
+        vehicle_counts = {}
+
+        for line_id, counts in self.stats_data.get("line_counts", {}).items():
+            for vehicle_type, count in counts.get("total", {}).items():
+                vehicle_counts[vehicle_type] = vehicle_counts.get(vehicle_type, 0) + count
+
+        if not vehicle_counts:
+            ax.set_title("No vehicle type data available")
+            self.vehicle_types_canvas.draw()
+            return
+
+        labels = list(vehicle_counts.keys())
+        sizes = list(vehicle_counts.values())
+
+        colors = ['#81a1c1', '#a3be8c', '#ebcb8b', '#d08770', '#b48ead', '#88c0d0']
+
+        ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors)
+        ax.set_title("Vehicle Types Distribution")
+        ax.axis('equal')
+
+        self.vehicle_types_canvas.fig.tight_layout()
+        self.vehicle_types_canvas.draw()
+
+    def create_lane_occupancy_pie(self):
+        ax = self.lane_occupancy_canvas.axes
+        ax.clear()
+
+        lane_occupancy = self.stats_data.get("lane_occupancy", {})
+        if not lane_occupancy:
+            ax.set_title("No lane occupancy data available")
+            self.lane_occupancy_canvas.draw()
+            return
+
+        labels = [f"Lane {lane_id}" for lane_id in lane_occupancy.keys()]
+        sizes = list(lane_occupancy.values())
+
+        colors = ['#88c0d0', '#81a1c1', '#a3be8c', '#ebcb8b', '#d08770']
+
+        ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors)
+        ax.set_title("Lane Occupancy")
+        ax.axis('equal')
+
+        self.lane_occupancy_canvas.fig.tight_layout()
+        self.lane_occupancy_canvas.draw()
+
+    def create_speed_bar_chart(self):
+        ax = self.speed_canvas.axes
+        ax.clear()
+
+        avg_speeds = self.stats_data.get("avg_speeds", {})
+        if not avg_speeds:
+            ax.set_title("No speed data available")
+            self.speed_canvas.draw()
+            return
+
+        vehicle_types = list(avg_speeds.keys())
+        speeds = list(avg_speeds.values())
+
+        y_pos = np.arange(len(vehicle_types))
+        bars = ax.barh(y_pos, speeds, align='center', color='#81a1c1')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(vehicle_types)
+        ax.invert_yaxis()
+        ax.set_xlabel('Speed (pixels/sec)')
+        ax.set_title('Average Speed by Vehicle Type')
+
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(width + 0.5, bar.get_y() + bar.get_height()/2,
+                    f'{width:.1f}', ha='left', va='center')
+
+        self.speed_canvas.fig.tight_layout()
+        self.speed_canvas.draw()
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -205,19 +500,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_video_path = None
         self.processing_thread = None
 
-        self.central_widget = QtWidgets.QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.layout = QtWidgets.QGridLayout(self.central_widget)
+        self.tab_widget = QtWidgets.QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        self.processing_tab = QtWidgets.QWidget()
+        self.processing_layout = QtWidgets.QGridLayout(self.processing_tab)
 
         self.btn_select_video = QtWidgets.QPushButton("Select Video")
         self.lbl_video_path = QtWidgets.QLabel("No video selected")
-        self.layout.addWidget(self.btn_select_video, 0, 0)
-        self.layout.addWidget(self.lbl_video_path, 0, 1, 1, 2)
+        self.processing_layout.addWidget(self.btn_select_video, 0, 0)
+        self.processing_layout.addWidget(self.lbl_video_path, 0, 1, 1, 2)
 
         self.image_label = ImageLabel()
         self.image_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.image_label.setStyleSheet("border: 1px solid gray;")
-        self.layout.addWidget(self.image_label, 1, 0)
+        self.processing_layout.addWidget(self.image_label, 1, 0)
 
         self.video_group = QtWidgets.QGroupBox("Output Video")
         self.video_layout = QtWidgets.QVBoxLayout()
@@ -234,7 +531,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.video_layout.addWidget(self.video_widget, 1)
         self.video_layout.addLayout(self.video_control_layout)
         self.video_group.setLayout(self.video_layout)
-        self.layout.addWidget(self.video_group, 1, 1, 1, 2)
+        self.processing_layout.addWidget(self.video_group, 1, 1, 1, 2)
 
         self.controls_container = QtWidgets.QWidget()
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_container)
@@ -286,7 +583,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls_scroll_area = QtWidgets.QScrollArea()
         self.controls_scroll_area.setWidgetResizable(True)
         self.controls_scroll_area.setWidget(self.controls_container)
-        self.layout.addWidget(self.controls_scroll_area, 2, 0)
+        self.processing_layout.addWidget(self.controls_scroll_area, 2, 0)
 
         self.log_group = QtWidgets.QGroupBox("Logs")
         self.log_layout = QtWidgets.QVBoxLayout()
@@ -298,16 +595,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_output.setFont(log_font)
         self.log_layout.addWidget(self.log_output)
         self.log_group.setLayout(self.log_layout)
-        self.layout.addWidget(self.log_group, 2, 1, 1, 2)
+        self.processing_layout.addWidget(self.log_group, 2, 1, 1, 2)
 
         self.lbl_status = QtWidgets.QLabel("")
-        self.layout.addWidget(self.lbl_status, 3, 0, 1, 3)
+        self.processing_layout.addWidget(self.lbl_status, 3, 0, 1, 3)
 
-        self.layout.setColumnStretch(0, 2)
-        self.layout.setColumnStretch(1, 1)
-        self.layout.setColumnStretch(2, 1)
-        self.layout.setRowStretch(1, 4)
-        self.layout.setRowStretch(2, 2)
+        self.processing_layout.setColumnStretch(0, 2)
+        self.processing_layout.setColumnStretch(1, 1)
+        self.processing_layout.setColumnStretch(2, 1)
+        self.processing_layout.setRowStretch(1, 4)
+        self.processing_layout.setRowStretch(2, 2)
+
+        self.stats_tab = StatsTab(stats_dir=STATS_DIR)
+
+        self.tab_widget.addTab(self.processing_tab, "Processing")
+        self.tab_widget.addTab(self.stats_tab, "Statistics")
 
         self.btn_select_video.clicked.connect(self.select_video)
         self.image_label.line_drawn.connect(self.update_line_coords)
@@ -552,6 +854,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.media_player.setSource(QtCore.QUrl.fromLocalFile(self.output_video_path))
                 self.log_output.append("Output video loaded. Press Play.")
                 self.update_video_buttons()
+
+                self.tab_widget.setCurrentWidget(self.stats_tab)
+                self.stats_tab.refresh_stats_files()
             else:
                 self.log_output.append("Output video file not found after processing.")
         else:
