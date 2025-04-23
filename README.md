@@ -1,97 +1,236 @@
-# ROS2 and NVIDIA DeepStream Integration for Traffic Analytics
+# Traffic Analytics Dashboard using DeepStream, ROS2 and PyQt
 
-This project provides a framework for building a traffic analytics dashboard using **NVIDIA DeepStream** for optimized inference and **ROS2** for modularity and communication. It's designed for easy addition of custom features.
+This project implements a comprehensive traffic analytics system using **NVIDIA DeepStream** for optimized inference, **ROS2** for modularity, and **PyQt6** for visualization. The system analyzes traffic patterns, vehicle crossings, lane occupation, and vehicle-type compliance with designated lanes.
 
-*This setup is part of a larger integration effort.*
+## System Overview
 
-## **Prerequisites**
+The system consists of three main components:
+1. **DeepStream Pipeline** - Optimized ML inference engine for object detection and tracking
+2. **ROS2 Integration** - Middleware for component communication and modularity
+3. **PyQt6 GUI** - Interactive interface for setting up analytics and visualizing results
+
+![System Architecture](images/architecture.png)
+
+## Features
+
+- **Vehicle Detection and Tracking** - Identify and track vehicles across frames
+- **Line Crossing Analytics** - Count vehicles crossing designated lines
+- **Vehicle Type Categorization** - Identify different vehicle types (car, truck, bus, motorcycle, bicycle)
+- **ROI-based Filtering** - Focus analysis on specific regions of interest
+- **Lane Compliance Analysis** - Check if heavy/light vehicles are using recommended lanes
+- **Statistical Visualization** - Graphs and charts showing traffic patterns, distributions, and analytics
+- **Video Processing** - Process pre-recorded videos and save results
+
+## Prerequisites
+
 - NVIDIA GPU with CUDA support
-- Docker installed with GPU support: [NVIDIA Docker Setup](https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_docker_containers.html)
-- Ubuntu 20.04+ recommended
-- Python 3.8+
+- Ubuntu 20.04+ with Python 3.8+
+- NVIDIA DeepStream 6.2+
+- ROS2 Humble
+- PyQt6
 
----
+## YOLOv8 Object Detection
 
-## **Setup Instructions**
+The system uses YOLOv8m as the object detection model, which provides fast and accurate detection of various vehicle types:
 
-### **1. Get Docker Image**
-Pull the prebuilt image with DeepStream and ROS2:
+- Car
+- Truck
+- Bus
+- Motorcycle
+- Bicycle
+
+YOLOv8 is integrated with DeepStream using NVIDIA's TensorRT for optimized inference. The model has been configured to filter for vehicle classes from the COCO dataset, ignoring irrelevant classes like person, airplane, etc.
+
+### YOLOv8 DeepStream Integration
+
+The model is converted to ONNX format and optimized with TensorRT using the process:
 ```bash
-docker pull kamleshvkumarsingh/deepstream_ros2:latest
-```
-
-### **2. Launch Container**
-Run with GPU access and display forwarding:
-```bash
-docker run --gpus all -it --rm --net=host --privileged \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -e DISPLAY=$DISPLAY \
-    -w /opt/nvidia/deepstream/deepstream/ \
-    kamleshvkumarsingh/deepstream_ros2:latest
-```
-
-### **3. Install Dependencies (Inside Container)**
-```bash
-sudo apt update
-# Install essential libraries and CUDA toolkit
-sudo apt install -y python3-gi python3-dev python3-gst-1.0 python-gi-dev git meson python3 python3-pip python3.10-dev cmake g++ build-essential libglib2.0-dev libglib2.0-dev-bin libgstreamer1.0-dev libtool m4 autoconf automake libgirepository1.0-dev libcairo2-dev cuda-toolkit-12-3
-# Install Python packages
-pip3 install onnx onnxslim onnxruntime ultralytics matplotlib
-```
-
----
-
-## **YOLO Setup for DeepStream**
-
-### **4. Prepare YOLOv8 Model**
-```bash
-# Clone necessary repos
-git clone https://github.com/ultralytics/ultralytics.git
-git clone https://github.com/marcoslucianops/DeepStream-Yolo.git
-
-# Copy export utility
-cp DeepStream-Yolo/utils/export_yoloV8.py ultralytics/.
-
-# Navigate to ultralytics directory
-cd ultralytics
-
-# Download weights (e.g., yolov8m)
-wget https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m.pt
-
-# Export to ONNX
+# Export YOLOv8 to ONNX format
 python3 export_yoloV8.py -w yolov8m.pt --dynamic --simplify
-
-# Move ONNX model and labels back to DeepStream-Yolo directory (adjust paths as needed)
-mv yolov8m.pt.onnx ../DeepStream-Yolo/
-mv labels.txt ../DeepStream-Yolo/
-cd ../DeepStream-Yolo
 ```
 
-### **5. Compile YOLO Custom Plugins**
+The configuration for the YOLOv8 detector is stored in `config_inferyolov8.txt`.
+
+## DeepStream Pipeline Architecture
+
+### Core Pipeline Classes
+
+1. **NodeFileSinkPipeline**
+   - Base class for ROS2-integrated DeepStream pipelines with file output
+   - Handles GStreamer pipeline setup for processing and saving video files
+
+2. **TrafboardPipeline**
+   - Extends NodeFileSinkPipeline with traffic analysis capabilities
+   - Manages line crossing detection, vehicle tracking, ROI filtering
+   - Collects and processes traffic statistics
+
+### Pipeline Elements
+
+The pipeline is composed of these GStreamer elements:
+- `filesrc` - Reads input video file
+- `nvv4l2decoder` - Hardware-accelerated video decoding
+- `nvstreammux` - Batches frames for efficient processing
+- `nvinfer` - Runs the YOLOv8 model for object detection
+- `nvtracker` - Tracks objects across video frames
+- `nvvideoconvert` - Handles format conversions
+- `nvdsosd` - Overlays detection, tracking and analytics visualization
+- `nvv4l2h264enc` - Hardware-accelerated video encoding
+- `filesink` - Saves processed output to a file
+
+## Traffic Analytics Components
+
+### Vehicle Detection & Tracking
+
+The system detects and tracks 5 vehicle classes:
+- Car
+- Truck
+- Bus
+- Motorcycle
+- Bicycle
+
+Each detection includes bounding box, class ID, tracking ID, and movement trajectory.
+
+### Line Crossing Detection
+
+The system allows defining multiple horizontal lines in the video frame. When vehicles cross these lines, the system:
+- Counts the crossing event
+- Records the vehicle type
+- Determines the direction (inbound/outbound)
+- Updates statistical counters
+
+### Lane Compliance Analysis
+
+The user can designate lanes as:
+- **Inner Lanes** - Recommended for heavy vehicles (trucks, buses)
+- **Outer Lanes** - Recommended for light vehicles (cars, motorcycles, bicycles)
+
+The system tracks compliance rates and provides analytics on whether vehicles are using appropriate lanes.
+
+### Statistical Analysis
+
+The system generates comprehensive statistics:
+- **Vehicle Counts** - Total vehicles by type, direction, and crossing point
+- **Traffic Flow** - Time-series analysis of vehicle movement
+- **Vehicle Type Distribution** - Percentage breakdown of vehicle types
+- **Average Speeds** - Estimated speeds by vehicle type
+- **Lane Occupancy** - Percentage of time each lane is occupied
+- **Lane Compliance** - How well vehicles adhere to recommended lane usage
+
+## PyQt GUI Interface
+
+The graphical user interface provides:
+
+1. **Video Input Processing**
+   - Select and preview input videos
+   - Define regions of interest (ROI)
+   - Draw line crossing points
+   - Designate inner/outer lanes
+
+2. **Video Output Display**
+   - View processed video with visualizations
+   - Basic playback controls
+
+3. **Statistics Dashboard**
+   - Interactive charts and graphs
+   - Time-series data visualization
+   - Vehicle type distribution
+   - Lane occupancy analysis
+   - Lane compliance rates
+
+## Usage Instructions
+
+### Installation
+
+1. **Install dependencies**:
 ```bash
-export CUDA_VER=12.3 # Set your CUDA version
-make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
+# ROS2 and DeepStream should be installed first
+
+# Install PyQt and other requirements
+pip install PyQt6 numpy matplotlib opencv-python
 ```
 
-### **6. Configure and Run**
-1.  **Edit Config:** Update `config_infer_primary_yoloV8.txt` (or similar) in your DeepStream application directory with the correct paths to the generated `yolov8m.pt.onnx` model and `labels.txt`.
-2.  **Run Example:** (Assuming you have a DeepStream Python app configured)
-    ```bash
-    # Example using a test application (adjust path and config file)
-    cd /path/to/your/deepstream_python_app/
-    python3 your_app.py your_video.mp4
-    ```
-    *Or using `deepstream-app`:*
-    ```bash
-    # Example using deepstream-app (adjust path and config file)
-    cd /path/to/your/deepstream_config/
-    deepstream-app -c your_deepstream_app_config.txt
-    ```
+2. **Prepare the environment**:
+```bash
+# Create stats directory for storing analytics
+mkdir -p ~/deepstream/stats
+mkdir -p ~/deepstream/videos
+```
 
----
+### Running the Application
 
-## **Project Goal: Traffic Analytics Dashboard**
+1. **Launch the PyQt interface**:
+```bash
+cd ~/deepstream
+python pyqt_line_ui.py
+```
 
-This setup forms the basis for a dashboard analyzing traffic patterns. DeepStream handles the heavy lifting of object detection/tracking, while ROS2 provides the communication backbone for processing results, adding custom logic (like counting vehicles, speed estimation), and potentially visualizing data.
+2. **Process a video**:
+   - Click "Select Video" to choose an input video
+   - Draw lines where you want to count vehicles (horizontal lines across lanes)
+   - Optionally draw a Region of Interest (ROI) to focus detection
+   - Designate inner lanes (for heavy vehicles) and outer lanes (for light vehicles)
+   - Click "Process Video" to start analysis
 
----
+3. **View statistics**:
+   - After processing, the application automatically switches to the "Statistics" tab
+   - Explore the various charts and graphs showing traffic analytics
+   - Review lane compliance metrics to see if vehicles are using appropriate lanes
+
+## File Structure
+
+```
+~/deepstream/
+├── pyqt_line_ui.py       # Main PyQt GUI application
+├── trafboard.py          # DeepStream traffic analysis pipeline
+├── deepstream_class.py   # Base classes for DeepStream pipelines
+├── config_inferyolov8.txt  # YOLOv8 model configuration
+├── config_tracker.txt    # DeepStream tracker configuration
+├── stats/                # Output statistics in JSON format
+└── videos/               # Output processed videos
+```
+
+## Advanced Usage
+
+### Custom Line Configurations
+
+The system allows for complex line crossing setups:
+```
+python trafboard.py --lines 1 100 400 500 400 --lines 2 200 600 600 600
+```
+
+### Lane Designation for Compliance Analysis
+
+Specify which lanes are for which vehicle types:
+```
+python trafboard.py --inner-lanes 2 3 --outer-lanes 1 4 5
+```
+
+## Development Architecture
+
+### TrafficStats Class
+
+Tracks and calculates all traffic statistics:
+- Vehicle counts by type, line, and direction
+- Time-series data across the video duration
+- Speed estimation based on pixel movement
+- Lane occupancy measurements
+- Lane compliance rates
+
+### StatsTab Class
+
+PyQt component for visualizing analytics:
+- Time series charts of traffic flow
+- Pie charts of vehicle type distribution
+- Lane occupancy visualization
+- Lane compliance bar charts
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- NVIDIA for DeepStream SDK
+- Ultralytics for YOLOv8
+- PyQt team for the GUI framework
+- ROS2 community for the middleware platform
