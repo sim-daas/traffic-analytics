@@ -33,20 +33,28 @@ DS_ROI_THICKNESS = 2
 DS_BBOX_THICKNESS = 2
 DS_TRAIL_THICKNESS = 2
 
-# Define class labels based on YOLO configuration
+# Define only vehicle classes from COCO dataset
 VEHICLE_CLASSES = {
-    0: 'person',       # Not a vehicle but useful to track
     1: 'bicycle',      
     2: 'car',
     3: 'motorcycle',
     5: 'bus',
     7: 'truck'
-    # Add other vehicle classes as needed
+    # No other classes like person, airplane, etc.
 }
+
+# Define vehicle types that should use inner lanes (heavy vehicles)
+INNER_LANE_VEHICLES = ['truck', 'bus']
+# Define vehicle types that should use outer lanes (light vehicles)
+OUTER_LANE_VEHICLES = ['car', 'bicycle', 'motorcycle']
+
+def is_vehicle_class(class_id):
+    """Check if the class ID belongs to a vehicle class we're tracking"""
+    return class_id in VEHICLE_CLASSES
 
 class TrafficStats:
     """Class for tracking and storing traffic statistics"""
-    def __init__(self, lines, output_dir='./stats'):
+    def __init__(self, lines, output_dir='./stats', inner_lanes=None, outer_lanes=None):
         self.start_time = time.time()
         
         # Create stats directory if it doesn't exist
@@ -64,6 +72,18 @@ class TrafficStats:
                 'outbound': defaultdict(int),  # Vehicles moving up
                 'total': defaultdict(int)      # Total regardless of direction
             }
+        
+        # Lane recommendations setup  
+        self.inner_lanes = set(inner_lanes) if inner_lanes else set()
+        self.outer_lanes = set(outer_lanes) if outer_lanes else set()
+        
+        # Lane compliance statistics
+        self.lane_compliance = {
+            'correct': defaultdict(int),   # Vehicles in correct lane type
+            'incorrect': defaultdict(int), # Vehicles in incorrect lane type
+            'compliance_rate': {},         # Will be calculated at the end
+            'by_lane': defaultdict(lambda: defaultdict(int))  # Detailed counts by lane and vehicle type
+        }
             
         # Time series data (each entry is a timestamp with counts)
         self.time_series = []
@@ -83,7 +103,7 @@ class TrafficStats:
         
         # Initialize the current time slice
         self._update_time_slice()
-        
+    
     def _update_time_slice(self):
         """Initialize or update the current time slice for time series data"""
         current_time = time.time()
@@ -110,6 +130,10 @@ class TrafficStats:
     
     def update_vehicle_crossing(self, line_id, object_id, vehicle_class, is_inbound):
         """Update statistics when a vehicle crosses a line"""
+        # Only update if it's a vehicle class we care about
+        if not is_vehicle_class(vehicle_class):
+            return
+            
         # Increase counts for the appropriate line and direction
         direction = 'inbound' if is_inbound else 'outbound'
         class_name = VEHICLE_CLASSES.get(vehicle_class, f'class_{vehicle_class}')
@@ -122,6 +146,10 @@ class TrafficStats:
         
     def update_vehicle_position(self, object_id, class_id, position_x, position_y):
         """Track vehicle positions for speed calculation"""
+        # Only track if it's a vehicle class we care about
+        if not is_vehicle_class(class_id):
+            return
+            
         current_time = time.time()
         if object_id not in self.vehicle_positions:
             self.vehicle_positions[object_id] = []
@@ -190,6 +218,30 @@ class TrafficStats:
             occupancy_pct = (self.lane_time_blocks[lane_id]['total_occupied_time'] / total_time) * 100
             self.lane_occupancy[lane_id] = occupancy_pct
     
+    def update_lane_compliance(self, lane_id, vehicle_class):
+        """Update statistics on whether vehicles are using recommended lanes"""
+        # Only track if it's a vehicle class we care about
+        if not is_vehicle_class(vehicle_class):
+            return
+            
+        class_name = VEHICLE_CLASSES.get(vehicle_class, f'class_{vehicle_class}')
+        
+        # Record vehicle type in this lane for statistics
+        self.lane_compliance['by_lane'][str(lane_id)][class_name] += 1
+        
+        # Check if this vehicle is in the correct lane type
+        is_correct = False
+        if lane_id in self.inner_lanes and class_name in INNER_LANE_VEHICLES:
+            is_correct = True
+        elif lane_id in self.outer_lanes and class_name in OUTER_LANE_VEHICLES:
+            is_correct = True
+            
+        # Update compliance statistics
+        if is_correct:
+            self.lane_compliance['correct'][class_name] += 1
+        else:
+            self.lane_compliance['incorrect'][class_name] += 1
+    
     def calculate_final_stats(self):
         """Calculate final statistics before saving"""
         # Calculate average speeds
@@ -203,6 +255,18 @@ class TrafficStats:
             
         # Final time slice update
         self._update_time_slice()
+        
+        # Calculate lane compliance rates
+        for vehicle_type in set(list(self.lane_compliance['correct'].keys()) + list(self.lane_compliance['incorrect'].keys())):
+            correct = self.lane_compliance['correct'].get(vehicle_type, 0)
+            incorrect = self.lane_compliance['incorrect'].get(vehicle_type, 0)
+            total = correct + incorrect
+            
+            if total > 0:
+                compliance_rate = (correct / total) * 100
+                self.lane_compliance['compliance_rate'][vehicle_type] = compliance_rate
+            else:
+                self.lane_compliance['compliance_rate'][vehicle_type] = 0
     
     def save_stats(self):
         """Save all statistics to file"""
@@ -217,6 +281,13 @@ class TrafficStats:
             'time_series': self.time_series,
             'avg_speeds': self.avg_speeds,
             'lane_occupancy': {str(k): v for k, v in self.lane_occupancy.items()},
+            'lane_compliance': self.lane_compliance,
+            'lane_recommendations': {
+                'inner_lanes': list(self.inner_lanes),
+                'outer_lanes': list(self.outer_lanes),
+                'inner_vehicles': INNER_LANE_VEHICLES,
+                'outer_vehicles': OUTER_LANE_VEHICLES
+            }
         }
         
         # Convert defaultdicts to regular dicts for JSON serialization
@@ -244,9 +315,8 @@ class TrafficStats:
 
 class TrafboardPipeline(NodeFileSinkPipeline):
     def __init__(self, pgie_config, input_file_path, tracker_config_path, output_file_path,
-                 lines_data, roi_coords,
-                 stats_dir='./stats',
-                 node_name='trafboard_line_sink_node'):
+                 lines_data, roi_coords, inner_lanes=None, outer_lanes=None,
+                 stats_dir='./stats', node_name='trafboard_line_sink_node'):
         super().__init__(pgie_config, input_file_path, tracker_config_path, output_file_path, node_name=node_name)
 
         try:
@@ -336,8 +406,24 @@ class TrafboardPipeline(NodeFileSinkPipeline):
         else:
             self.get_logger().warning("ROI coordinates invalid or not provided. ROI filtering disabled.")
 
+        # --- Lane Recommendations Setup ---
+        self.inner_lanes = set(inner_lanes) if inner_lanes else set()
+        self.outer_lanes = set(outer_lanes) if outer_lanes else set()
+        
+        if self.inner_lanes:
+            self.get_logger().info(f"Inner lanes (for heavy vehicles): {', '.join(map(str, self.inner_lanes))}")
+        if self.outer_lanes:
+            self.get_logger().info(f"Outer lanes (for light vehicles): {', '.join(map(str, self.outer_lanes))}")
+            
+        # Validate lane recommendations against defined lines
+        defined_lane_ids = {line['id'] for line in self.lines} if self.lines else set()
+        for lane_id in self.inner_lanes.union(self.outer_lanes):
+            if lane_id not in defined_lane_ids:
+                self.get_logger().warning(f"Lane {lane_id} specified in recommendations but not defined as a line")
+        # --- End Lane Recommendations Setup ---
+
         # --- Traffic Statistics Setup ---
-        self.stats = TrafficStats(self.lines, stats_dir) if self.lines else None
+        self.stats = TrafficStats(self.lines, stats_dir, inner_lanes, outer_lanes) if self.lines else None
         self.lane_ids = {i+1: line['id'] for i, line in enumerate(self.lines)} # Map lane numbers to line IDs
         # --- End Statistics Setup ---
 
@@ -464,6 +550,21 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                     obj_meta=pyds.NvDsObjectMeta.cast(l_obj.data)
                     object_id = obj_meta.object_id
                     class_id = obj_meta.class_id
+                    
+                    # Skip non-vehicle classes
+                    if not is_vehicle_class(class_id):
+                        # Hide non-vehicle objects
+                        rect_params = obj_meta.rect_params
+                        rect_params.border_width = 0
+                        txt_params = obj_meta.text_params
+                        if txt_params:
+                            txt_params.display_text = ""
+                        try:
+                            l_obj=l_obj.next
+                        except StopIteration:
+                            break
+                        continue
+
                     rect_params = obj_meta.rect_params
                     top = int(rect_params.top)
                     left = int(rect_params.left)
@@ -540,6 +641,10 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                                         lane_occupied[lane_num] = True
                                         if self.stats:
                                             self.stats.update_lane_occupancy(lane_num, True)
+                                            
+                                # Update lane compliance statistics
+                                if self.stats and class_id in VEHICLE_CLASSES:
+                                    self.stats.update_lane_compliance(line_id, class_id)
 
                             # Skip if already counted for this line
                             if object_id in self.object_crossed_line and line_id in self.object_crossed_line[object_id]:
@@ -621,6 +726,10 @@ def main(args=None):
                         help='Region of Interest coordinates (xmin, ymin, xmax, ymax) based on ORIGINAL video resolution.')
     parser.add_argument('--stats-dir', type=str, default='./stats', 
                         help='Directory to save traffic statistics JSON files')
+    parser.add_argument('--inner-lanes', type=int, nargs='+', default=None,
+                        help='Line IDs for inner lanes (recommended for heavy vehicles like trucks/buses)')
+    parser.add_argument('--outer-lanes', type=int, nargs='+', default=None, 
+                        help='Line IDs for outer lanes (recommended for light vehicles like cars/motorcycles)')
 
     parsed_args = parser.parse_args()
 
@@ -660,8 +769,10 @@ def main(args=None):
             input_file_path=parsed_args.input_video,
             tracker_config_path=parsed_args.tracker_config,
             output_file_path=parsed_args.output_video,
-            lines_data=lines_data, # Pass parsed lines data
+            lines_data=lines_data,
             roi_coords=roi_coordinates,
+            inner_lanes=parsed_args.inner_lanes,
+            outer_lanes=parsed_args.outer_lanes,
             stats_dir=parsed_args.stats_dir
         )
         pipeline_node.get_logger().info(f"Trafboard Pipeline Node (Sink Mode) created for {parsed_args.input_video} -> {parsed_args.output_video}")

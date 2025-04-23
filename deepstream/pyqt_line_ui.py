@@ -332,6 +332,7 @@ class StatsTab(QtWidgets.QWidget):
         self.create_vehicle_types_pie()
         self.create_lane_occupancy_pie()
         self.create_speed_bar_chart()
+        self.create_lane_compliance_chart()
 
     def update_counts_table(self):
         if not self.stats_data:
@@ -480,6 +481,82 @@ class StatsTab(QtWidgets.QWidget):
         self.speed_canvas.fig.tight_layout()
         self.speed_canvas.draw()
 
+    def create_lane_compliance_chart(self):
+        """Create a bar chart showing lane compliance by vehicle type"""
+        if not hasattr(self, 'compliance_canvas'):
+            self.compliance_canvas = MplCanvas(self, width=5, height=3)
+            self.plots_group.layout().addWidget(self.compliance_canvas, 2, 0, 1, 2)
+
+        ax = self.compliance_canvas.axes
+        ax.clear()
+
+        # Get compliance rates but filter out non-vehicle types
+        lane_compliance = self.stats_data.get("lane_compliance", {})
+        compliance_rates = lane_compliance.get("compliance_rate", {})
+        
+        # Vehicle classes we want to display (car, motorcycle, bus, truck, bicycle)
+        vehicle_classes = ['bicycle', 'car', 'motorcycle', 'bus', 'truck']
+
+        if not compliance_rates:
+            ax.set_title("No lane compliance data available")
+            self.compliance_canvas.draw()
+            return
+
+        vehicle_types = []
+        rates = []
+
+        # Only include vehicle classes
+        for vehicle_type, rate in compliance_rates.items():
+            # Skip if not a vehicle class we're interested in
+            if vehicle_type not in vehicle_classes and not vehicle_type.startswith('class_'):
+                continue
+            vehicle_types.append(vehicle_type)
+            rates.append(rate)
+
+        # If no vehicle types to display after filtering
+        if not vehicle_types:
+            ax.set_title("No vehicle compliance data available")
+            self.compliance_canvas.draw()
+            return
+
+        y_pos = np.arange(len(vehicle_types))
+
+        colors = []
+        for rate in rates:
+            if rate >= 80:
+                colors.append('#a3be8c')
+            elif rate >= 50:
+                colors.append('#ebcb8b')
+            else:
+                colors.append('#bf616a')
+
+        bars = ax.barh(y_pos, rates, align='center', color=colors)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(vehicle_types)
+        ax.set_xlim(0, 100)
+        ax.set_xlabel('Compliance Rate (%)')
+        ax.set_title('Lane Recommendation Compliance by Vehicle Type')
+
+        lane_recommendations = self.stats_data.get("lane_recommendations", {})
+        inner_lanes = lane_recommendations.get("inner_lanes", [])
+        outer_lanes = lane_recommendations.get("outer_lanes", [])
+
+        if inner_lanes or outer_lanes:
+            inner_text = f"Inner Lanes: {', '.join(map(str, inner_lanes))}" if inner_lanes else "No inner lanes defined"
+            outer_text = f"Outer Lanes: {', '.join(map(str, outer_lanes))}" if outer_lanes else "No outer lanes defined"
+
+            ax.text(0.5, -0.15, f"{inner_text}\n{outer_text}",
+                    ha='center', va='center', transform=ax.transAxes,
+                    bbox=dict(boxstyle="round,pad=0.3", fc="#88c0d0", alpha=0.3))
+
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(width + 2, bar.get_y() + bar.get_height()/2,
+                    f'{width:.1f}%', ha='left', va='center')
+
+        self.compliance_canvas.fig.tight_layout()
+        self.compliance_canvas.draw()
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -538,6 +615,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.line_mgmt_group = QtWidgets.QGroupBox("Lines")
         self.line_mgmt_layout = QtWidgets.QVBoxLayout()
+
         self.line_id_layout = QtWidgets.QHBoxLayout()
         self.lbl_line_id = QtWidgets.QLabel("Line ID:")
         self.spin_line_id = QtWidgets.QSpinBox()
@@ -551,6 +629,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.list_lines = QtWidgets.QListWidget()
         self.list_lines.setFixedHeight(100)
 
+        self.lane_designation_group = QtWidgets.QGroupBox("Lane Designation")
+        self.lane_designation_layout = QtWidgets.QVBoxLayout()
+
+        self.inner_lanes_layout = QtWidgets.QHBoxLayout()
+        self.lbl_inner_lanes = QtWidgets.QLabel("Inner Lanes (Heavy Vehicles):")
+        self.inner_lanes_input = QtWidgets.QLineEdit()
+        self.inner_lanes_input.setPlaceholderText("e.g. 2,3 (comma-separated IDs)")
+        self.inner_lanes_input.setText("1,2")  # Set default inner lanes to 1,2
+        self.inner_lanes_layout.addWidget(self.lbl_inner_lanes)
+        self.inner_lanes_layout.addWidget(self.inner_lanes_input)
+
+        self.outer_lanes_layout = QtWidgets.QHBoxLayout()
+        self.lbl_outer_lanes = QtWidgets.QLabel("Outer Lanes (Light Vehicles):")
+        self.outer_lanes_input = QtWidgets.QLineEdit()
+        self.outer_lanes_input.setPlaceholderText("Auto-filled with remaining lanes")
+        self.outer_lanes_input.setReadOnly(True)  # Make it read-only as we'll auto-fill it
+        self.outer_lanes_layout.addWidget(self.lbl_outer_lanes)
+        self.outer_lanes_layout.addWidget(self.outer_lanes_input)
+
+        self.auto_outer_lanes_layout = QtWidgets.QHBoxLayout()
+        self.auto_outer_lanes_check = QtWidgets.QCheckBox("Automatically assign non-inner lanes as outer lanes")
+        self.auto_outer_lanes_check.setChecked(True)  # Enable by default
+        self.auto_outer_lanes_check.stateChanged.connect(self.toggle_auto_outer_lanes)
+        self.auto_outer_lanes_layout.addWidget(self.auto_outer_lanes_check)
+
+        self.lane_help_layout = QtWidgets.QHBoxLayout()
+        self.lane_help_label = QtWidgets.QLabel("Lane designation is used for compliance statistics.")
+        self.lane_help_label.setWordWrap(True)
+        self.lane_help_layout.addWidget(self.lane_help_label)
+
+        self.lane_designation_layout.addLayout(self.inner_lanes_layout)
+        self.lane_designation_layout.addLayout(self.outer_lanes_layout)
+        self.lane_designation_layout.addLayout(self.auto_outer_lanes_layout)
+        self.lane_designation_layout.addLayout(self.lane_help_layout)
+        self.lane_designation_group.setLayout(self.lane_designation_layout)
+
         self.line_clear_layout = QtWidgets.QHBoxLayout()
         self.btn_clear_line = QtWidgets.QPushButton("Clear Selected Line")
         self.btn_clear_all_lines = QtWidgets.QPushButton("Clear All Lines")
@@ -559,6 +673,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.line_mgmt_layout.addLayout(self.line_id_layout)
         self.line_mgmt_layout.addWidget(self.list_lines)
+        self.line_mgmt_layout.addWidget(self.lane_designation_group)
         self.line_mgmt_layout.addLayout(self.line_clear_layout)
         self.line_mgmt_group.setLayout(self.line_mgmt_layout)
 
@@ -719,6 +834,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error("Cannot calculate original line coordinates (invalid scale).")
             self.btn_process.setEnabled(bool(self.lines_original))
 
+        if self.auto_outer_lanes_check.isChecked():
+            self.update_outer_lanes()
+
     def update_roi_coords(self, x1_disp, y1_disp, x2_disp, y2_disp):
         if self.scale_x_display > 0 and self.scale_y_display > 0:
             x1_orig = int(x1_disp / self.scale_x_display)
@@ -748,6 +866,9 @@ class MainWindow(QtWidgets.QMainWindow):
             coords = self.lines_original[line_id]
             self.list_lines.addItem(f"Line {line_id}: {coords}")
 
+        if self.auto_outer_lanes_check.isChecked():
+            self.update_outer_lanes()
+
     def clear_selected_line(self):
         selected_items = self.list_lines.selectedItems()
         if not selected_items:
@@ -763,16 +884,47 @@ class MainWindow(QtWidgets.QMainWindow):
         except (IndexError, ValueError):
             self.show_error("Could not parse line ID from selected item.")
 
+        if self.auto_outer_lanes_check.isChecked():
+            self.update_outer_lanes()
+
     def clear_all_lines(self):
         self.lines_original.clear()
         self.image_label.clear_all_lines()
         self.update_line_list_widget()
         self.btn_process.setEnabled(False)
+        self.outer_lanes_input.setText("")
 
     def clear_roi(self):
         self.roi_coords_original = None
         self.image_label.clear_roi()
         self.lbl_roi_coords.setText("ROI Coords (Original): None")
+
+    def toggle_auto_outer_lanes(self, state):
+        is_auto = (state == QtCore.Qt.CheckState.Checked.value)
+        self.outer_lanes_input.setReadOnly(is_auto)
+        if is_auto:
+            self.update_outer_lanes()
+        else:
+            self.outer_lanes_input.setPlaceholderText("e.g. 3,4,5 (comma-separated IDs)")
+
+    def update_outer_lanes(self):
+        if not self.lines_original:
+            self.outer_lanes_input.setText("")
+            return
+
+        inner_lanes_text = self.inner_lanes_input.text().strip()
+        try:
+            inner_lanes = set([int(lane.strip()) for lane in inner_lanes_text.split(',') if lane.strip()])
+        except ValueError:
+            inner_lanes = set()
+
+        all_lanes = set(self.lines_original.keys())
+        outer_lanes = sorted(all_lanes - inner_lanes)
+
+        if outer_lanes:
+            self.outer_lanes_input.setText(",".join(str(lane) for lane in outer_lanes))
+        else:
+            self.outer_lanes_input.setText("")
 
     def _validate_and_get_roi(self):
         return self.roi_coords_original
@@ -822,6 +974,32 @@ class MainWindow(QtWidgets.QMainWindow):
                 str(current_roi[0]), str(current_roi[1]),
                 str(current_roi[2]), str(current_roi[3])
             ])
+
+        inner_lanes_text = self.inner_lanes_input.text().strip()
+        if not inner_lanes_text:
+            inner_lanes_text = "1,2"
+
+        try:
+            inner_lanes = [int(lane.strip()) for lane in inner_lanes_text.split(',') if lane.strip()]
+            if inner_lanes:
+                cmd.append("--inner-lanes")
+                cmd.extend([str(lane) for lane in inner_lanes])
+        except ValueError:
+            self.show_error("Invalid inner lanes format. Please enter comma-separated numbers.")
+            return
+
+        outer_lanes_text = self.outer_lanes_input.text().strip()
+        if outer_lanes_text:
+            try:
+                outer_lanes = [int(lane.strip()) for lane in outer_lanes_text.split(',') if lane.strip()]
+                if outer_lanes:
+                    cmd.append("--outer-lanes")
+                    cmd.extend([str(lane) for lane in outer_lanes])
+            except ValueError:
+                self.show_error("Invalid outer lanes format. Please enter comma-separated numbers.")
+                return
+
+        cmd.extend(["--stats-dir", STATS_DIR])
 
         self.log_output.clear()
         self.log_output.append("Starting processing...")

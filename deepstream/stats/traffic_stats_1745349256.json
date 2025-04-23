@@ -1,0 +1,1628 @@
+{
+  "start_time": 1745349256.0030656,
+  "end_time": 1745349294.1115868,
+  "duration": 38.108521461486816,
+  "line_counts": {
+    "1": {
+      "inbound": {
+        "car": 12,
+        "truck": 1
+      },
+      "outbound": {},
+      "total": {
+        "car": 12,
+        "truck": 1
+      }
+    },
+    "2": {
+      "inbound": {},
+      "outbound": {
+        "car": 12,
+        "truck": 4
+      },
+      "total": {
+        "car": 12,
+        "truck": 4
+      }
+    },
+    "3": {
+      "inbound": {},
+      "outbound": {
+        "car": 10,
+        "truck": 5
+      },
+      "total": {
+        "car": 10,
+        "truck": 5
+      }
+    },
+    "4": {
+      "inbound": {},
+      "outbound": {
+        "truck": 4
+      },
+      "total": {
+        "truck": 4
+      }
+    },
+    "5": {
+      "inbound": {
+        "car": 22,
+        "truck": 1
+      },
+      "outbound": {},
+      "total": {
+        "car": 22,
+        "truck": 1
+      }
+    },
+    "6": {
+      "inbound": {
+        "car": 2,
+        "truck": 2
+      },
+      "outbound": {},
+      "total": {
+        "car": 2,
+        "truck": 2
+      }
+    }
+  },
+  "time_series": [
+    {
+      "timestamp": 5.029504060745239,
+      "counts": {
+        "1": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 1
+          },
+          "total": {
+            "car": 1
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "6": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        }
+      }
+    },
+    {
+      "timestamp": 6.073270797729492,
+      "counts": {
+        "1": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 1
+          },
+          "total": {
+            "car": 1
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {
+            "car": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 1
+          }
+        },
+        "6": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        }
+      }
+    },
+    {
+      "timestamp": 7.14703893661499,
+      "counts": {
+        "1": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 1
+          },
+          "total": {
+            "car": 1
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2
+          },
+          "total": {
+            "car": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {
+            "car": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 9.386348485946655,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 1
+          },
+          "total": {
+            "car": 1
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {
+            "car": 3
+          },
+          "outbound": {},
+          "total": {
+            "car": 3
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 10.391701698303223,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {
+            "car": 6,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 6,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 11.545506715774536,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 4,
+            "truck": 2
+          },
+          "total": {
+            "car": 4,
+            "truck": 2
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {},
+          "total": {}
+        },
+        "5": {
+          "inbound": {
+            "car": 7,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 7,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 13.18798041343689,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 3,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 3,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 4,
+            "truck": 2
+          },
+          "total": {
+            "car": 4,
+            "truck": 2
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 1
+          },
+          "total": {
+            "truck": 1
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 9,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 9,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 14.532068967819214,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 4,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 4,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 9,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 9,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 15.788637638092041,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 5,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 5,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 10,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 10,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 16.85317373275757,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 6,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 6,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 11,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 11,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 17.918583393096924,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 6,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 6,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 3,
+            "truck": 2
+          },
+          "total": {
+            "car": 3,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 19.21846342086792,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 6,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 6,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 4,
+            "truck": 2
+          },
+          "total": {
+            "car": 4,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 13,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 13,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 20.601842641830444,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 6,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 6,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 4,
+            "truck": 2
+          },
+          "total": {
+            "car": 4,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 15,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 15,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 21.637014389038086,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 8,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 8,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 4,
+            "truck": 2
+          },
+          "total": {
+            "car": 4,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 15,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 15,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 24.64630651473999,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 10,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 10,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 3
+          },
+          "total": {
+            "car": 5,
+            "truck": 3
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 2
+          },
+          "total": {
+            "car": 5,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 16,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 16,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 26.053757190704346,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 11,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 11,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 6,
+            "truck": 4
+          },
+          "total": {
+            "car": 6,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 2
+          },
+          "total": {
+            "car": 5,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 2
+          },
+          "total": {
+            "truck": 2
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 17,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 17,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 27.30967092514038,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 8,
+            "truck": 4
+          },
+          "total": {
+            "car": 8,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 5,
+            "truck": 2
+          },
+          "total": {
+            "car": 5,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 3
+          },
+          "total": {
+            "truck": 3
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 17,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 17,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 28.323771953582764,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 11,
+            "truck": 4
+          },
+          "total": {
+            "car": 11,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 6,
+            "truck": 2
+          },
+          "total": {
+            "car": 6,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 3
+          },
+          "total": {
+            "truck": 3
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 18,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 18,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 1
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 29.959773302078247,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 11,
+            "truck": 4
+          },
+          "total": {
+            "car": 11,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 7,
+            "truck": 2
+          },
+          "total": {
+            "car": 7,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 3
+          },
+          "total": {
+            "truck": 3
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 18,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 18,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 31.558802604675293,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 11,
+            "truck": 4
+          },
+          "total": {
+            "car": 11,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 7,
+            "truck": 2
+          },
+          "total": {
+            "car": 7,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 3
+          },
+          "total": {
+            "truck": 3
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 19,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 19,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 33.58167886734009,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 12,
+            "truck": 4
+          },
+          "total": {
+            "car": 12,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 7,
+            "truck": 2
+          },
+          "total": {
+            "car": 7,
+            "truck": 2
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 4
+          },
+          "total": {
+            "truck": 4
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 19,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 19,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 35.613954067230225,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 12,
+            "truck": 4
+          },
+          "total": {
+            "car": 12,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 7,
+            "truck": 4
+          },
+          "total": {
+            "car": 7,
+            "truck": 4
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 4
+          },
+          "total": {
+            "truck": 4
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 20,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 20,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        }
+      }
+    },
+    {
+      "timestamp": 37.253663063049316,
+      "counts": {
+        "1": {
+          "inbound": {
+            "car": 12,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 12,
+            "truck": 1
+          }
+        },
+        "2": {
+          "inbound": {},
+          "outbound": {
+            "car": 12,
+            "truck": 4
+          },
+          "total": {
+            "car": 12,
+            "truck": 4
+          }
+        },
+        "3": {
+          "inbound": {},
+          "outbound": {
+            "car": 10,
+            "truck": 5
+          },
+          "total": {
+            "car": 10,
+            "truck": 5
+          }
+        },
+        "4": {
+          "inbound": {},
+          "outbound": {
+            "truck": 4
+          },
+          "total": {
+            "truck": 4
+          }
+        },
+        "5": {
+          "inbound": {
+            "car": 21,
+            "truck": 1
+          },
+          "outbound": {},
+          "total": {
+            "car": 21,
+            "truck": 1
+          }
+        },
+        "6": {
+          "inbound": {
+            "car": 2,
+            "truck": 2
+          },
+          "outbound": {},
+          "total": {
+            "car": 2,
+            "truck": 2
+          }
+        }
+      }
+    }
+  ],
+  "avg_speeds": {
+    "truck": 167.83736610460699,
+    "car": 232.3778268939261,
+    "person": 17.93644991567379
+  },
+  "lane_occupancy": {
+    "1": 47.45734464088213,
+    "2": 40.44438621070954,
+    "3": 19.86789038502213,
+    "4": 7.065966247772323,
+    "5": 27.687666309521063,
+    "6": 8.141849703653014
+  },
+  "lane_compliance": {
+    "correct": {},
+    "incorrect": {
+      "car": 3147,
+      "truck": 711,
+      "person": 3
+    },
+    "compliance_rate": {
+      "car": 0.0,
+      "person": 0.0,
+      "truck": 0.0
+    },
+    "by_lane": {
+      "4": {
+        "car": 73,
+        "truck": 83
+      },
+      "3": {
+        "car": 244,
+        "truck": 217
+      },
+      "1": {
+        "car": 1153,
+        "truck": 80
+      },
+      "2": {
+        "car": 1004,
+        "truck": 237,
+        "person": 3
+      },
+      "5": {
+        "car": 531,
+        "truck": 64
+      },
+      "6": {
+        "car": 142,
+        "truck": 30
+      }
+    }
+  },
+  "lane_recommendations": {
+    "inner_lanes": [],
+    "outer_lanes": [],
+    "inner_vehicles": [
+      "truck",
+      "bus"
+    ],
+    "outer_vehicles": [
+      "car",
+      "bicycle",
+      "motorcycle"
+    ]
+  }
+}
