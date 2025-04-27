@@ -183,11 +183,7 @@ This inheritance structure allows `TrafboardPipeline` to focus solely on the ana
 - Mobile application for remote monitoring and configuration.
 - Support for more camera types and video formats.
 
-## 7. License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 8. Acknowledgments
+## 7. Acknowledgments
 
 - NVIDIA for DeepStream SDK
 - Ultralytics for YOLOv8
