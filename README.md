@@ -9,7 +9,7 @@ The system consists of three main components:
 2. **ROS2 Integration** - Middleware for component communication and modularity
 3. **PyQt6 GUI** - Interactive interface for setting up analytics and visualizing results
 
-## Demo / Screenshots
+## Demo
 
 Below are some visuals from the application:
 
