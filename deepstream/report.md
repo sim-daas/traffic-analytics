@@ -85,7 +85,7 @@ This inheritance structure allows `TrafboardPipeline` to focus solely on the ana
         *   Specialized pipeline for traffic analysis, extending the file sink pipeline with traffic-specific processing.
         *   Parses additional parameters for traffic lines, ROIs, lane designations, and statistics output.
         *   Implements custom probing for analytics.
-    *   **Key Methods**:
+    *   **Key Methods**Isaac Sim/Robotics Weekly Livestream:
         *   `__init__(self, input_file, output_file, pgie_config, tracker_config, lines, roi, inner_lanes, outer_lanes, stats_dir, batch_size=1, width=640, height=480)`: Constructor that initializes the base class and sets up traffic-specific parameters.
         *   `custom_probe(self, pad, info)`: Method attached to the OSD sink pad for custom analytics processing.
 

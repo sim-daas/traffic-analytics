@@ -28,10 +28,10 @@ DS_LINE_COLORS = itertools.cycle([
 COLOR_ROI_DS = (0.533, 0.753, 0.816, 0.6) # Cyan
 COLOR_BBOX_DS = (1.0, 1.0, 0.0, 1.0) # Yellow
 # Thickness
-DS_LINE_THICKNESS = 2
-DS_ROI_THICKNESS = 2
-DS_BBOX_THICKNESS = 2
-DS_TRAIL_THICKNESS = 2
+DS_LINE_THICKNESS = 5
+DS_ROI_THICKNESS = 1
+DS_BBOX_THICKNESS = 3
+DS_TRAIL_THICKNESS = 4
 
 # Define only vehicle classes from COCO dataset
 VEHICLE_CLASSES = {
@@ -519,8 +519,8 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                     text_params.display_text = f"Line {line_id} Crossed: {count}"
                     text_params.x_offset = 10
                     text_params.y_offset = y_offset_start + label_idx * 30 # Stack labels
-                    text_params.font_params.font_name = "Sans" # Non-bold
-                    text_params.font_params.font_size = 16 # Smaller font
+                    text_params.font_params.font_name = "Sans Bold" # Bold font
+                    text_params.font_params.font_size = 22 # Increased font size
                     text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
                     text_params.set_bg_clr = 1 # Enable background color
                     text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6) # Black background
@@ -530,8 +530,8 @@ class TrafboardPipeline(NodeFileSinkPipeline):
                  text_params.display_text = "No lines defined"
                  text_params.x_offset = 10
                  text_params.y_offset = y_offset_start
-                 text_params.font_params.font_name = "Sans"
-                 text_params.font_params.font_size = 16
+                 text_params.font_params.font_name = "Sans Bold"
+                 text_params.font_params.font_size = 22
                  text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
                  text_params.set_bg_clr = 1
                  text_params.text_bg_clr.set(0.0, 0.0, 0.0, 0.6)
@@ -679,6 +679,13 @@ class TrafboardPipeline(NodeFileSinkPipeline):
 
                     rect_params.border_width = DS_BBOX_THICKNESS
                     rect_params.border_color.set(*COLOR_BBOX_DS)
+
+                    # Modify text parameters for class ID and label to be bold
+                    txt_params = obj_meta.text_params
+                    if txt_params:
+                        txt_params.font_params.font_name = "Sans Bold"
+                        # Optionally, increase font size if still not clear enough
+                        txt_params.font_params.font_size = 14 # Example size
 
                 except StopIteration:
                     break
