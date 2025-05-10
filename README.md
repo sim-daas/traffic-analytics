@@ -9,6 +9,20 @@ The system consists of three main components:
 2. **ROS2 Integration** - Middleware for component communication and modularity
 3. **PyQt6 GUI** - Interactive interface for setting up analytics and visualizing results
 
+## Demo / Screenshots
+
+Below are some visuals from the application:
+
+**Screenshot 1: Main Interface for Video Processing Setup**
+![Screenshot 1 of the application interface](demos/screenshot1.png)
+
+**Screenshot 2: Statistics Dashboard View**
+![Screenshot 2 of the statistics dashboard](demos/screenshot2.png)
+
+**Output Video Sample:**
+
+https://github.com/user-attachments/assets/e9c3f790-6aa6-464f-b539-89f3e6b08367
+
 ## Features
 
 - **Vehicle Detection and Tracking** - Identify and track vehicles across frames
